@@ -64,6 +64,8 @@ versions may not recompile or run correctly.
    `scripts/build.sh` (below); **Details** shows its output. When it is done,
    **FIFA Street** is in the Steam library.
 
+![The launcher building the game](docs/launcher-building.png)
+
 Later, **Update** gets the latest fixes and rebuilds only what they change;
 the disc is not read again. **Cancel** or closing the window stops a build,
 and the next one goes on from there. The launcher's log is
