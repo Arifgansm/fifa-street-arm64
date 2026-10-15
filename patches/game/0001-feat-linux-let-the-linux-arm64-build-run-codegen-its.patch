@@ -1,0 +1,60 @@
+From d039f8f33c23edb10d67555874dde6d3b0e584c3 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Kenan=20Kasumovi=C4=87?=
+ <46025606+Ken5998@users.noreply.github.com>
+Date: Thu, 15 Oct 2026 15:46:17 +0000
+Subject: [PATCH 1/2] feat(linux): let the linux-arm64 build run codegen itself
+
+The build runs rexglue codegen as a custom command, with the rexglue
+program it just found. When cross-compiling that program is an aarch64
+one the build machine cannot run, and on the handheld the port runs
+codegen itself before configuring, with its own progress and stamps.
+
+REXGLUE_EXTERNAL_CODEGEN=ON (off by default, so nothing changes for the
+Windows build) makes fifastreet_codegen an empty target instead: the
+host and the guest DLL modules build from the code already in
+generated/.
+---
+ .../recomp-template/generated/rexglue.cmake   | 30 ++++++++++++-------
+ 1 file changed, 19 insertions(+), 11 deletions(-)
+
+diff --git a/Installer/recomp-template/generated/rexglue.cmake b/Installer/recomp-template/generated/rexglue.cmake
+index 369bb16..806ea5e 100644
+--- a/Installer/recomp-template/generated/rexglue.cmake
++++ b/Installer/recomp-template/generated/rexglue.cmake
+@@ -114,17 +114,25 @@ endmacro()
+ # codegen, including one a project assembles itself rather than taking the
+ # library rexglue_setup_target() builds. The stamp comes first: the DEPFILE
+ # names it.
+-add_custom_command(
+-    OUTPUT "${CMAKE_CURRENT_SOURCE_DIR}/generated/default/codegen.build.stamp"
+-           ${REXGLUE_ENTRYPOINT_GENERATED_SOURCES}
+-    COMMAND $<TARGET_FILE:rex::rexglue> codegen ${CMAKE_CURRENT_SOURCE_DIR}/fifastreet_manifest.toml
+-    DEPFILE "${CMAKE_CURRENT_SOURCE_DIR}/generated/default/codegen.d"
+-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+-    COMMENT "Generating recompiled code for fifastreet"
+-    VERBATIM
+-)
+-add_custom_target(fifastreet_codegen
+-    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/generated/default/codegen.build.stamp")
++# REXGLUE_EXTERNAL_CODEGEN: the code is generated before configuring (the
++# linux-arm64 build runs rexglue itself, under qemu when cross-compiling),
++# so the build does not run it again.
++option(REXGLUE_EXTERNAL_CODEGEN "Code generated before configuring; do not run codegen in the build" OFF)
++if(REXGLUE_EXTERNAL_CODEGEN)
++    add_custom_target(fifastreet_codegen)
++else()
++    add_custom_command(
++        OUTPUT "${CMAKE_CURRENT_SOURCE_DIR}/generated/default/codegen.build.stamp"
++               ${REXGLUE_ENTRYPOINT_GENERATED_SOURCES}
++        COMMAND $<TARGET_FILE:rex::rexglue> codegen ${CMAKE_CURRENT_SOURCE_DIR}/fifastreet_manifest.toml
++        DEPFILE "${CMAKE_CURRENT_SOURCE_DIR}/generated/default/codegen.d"
++        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
++        COMMENT "Generating recompiled code for fifastreet"
++        VERBATIM
++    )
++    add_custom_target(fifastreet_codegen
++        DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/generated/default/codegen.build.stamp")
++endif()
+ 
+ # Include DLL module shared library targets if codegen has generated them
+ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/generated/default/dll_targets.cmake")

@@ -1,0 +1,63 @@
+From 16426088737a86c7a2986404c42ee0d5a7452a1e Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Kenan=20Kasumovi=C4=87?=
+ <46025606+Ken5998@users.noreply.github.com>
+Date: Thu, 15 Oct 2026 15:43:12 +0000
+Subject: [PATCH 8/8] fix(linux): load recompiled guest modules from
+ lib<name>.so
+
+Codegen registers a guest DLL module with its CMake target name (for
+example fifastreet_fifadllzf_xex) and the kernel dlopens that name as
+is. On Windows LoadLibrary finds name.dll beside the executable; on
+Linux CMake builds the SHARED library as lib<name>.so beside the
+executable, and dlopen neither adds the prefix and suffix nor searches
+that folder, so the module never loaded. Outside Windows the path is
+now the executable's folder / lib<name>.so, and a failure logs
+dlerror().
+---
+ src/system/kernel_state.cpp | 23 +++++++++++++++++++++--
+ 1 file changed, 21 insertions(+), 2 deletions(-)
+
+diff --git a/src/system/kernel_state.cpp b/src/system/kernel_state.cpp
+index f609238..f976782 100644
+--- a/src/system/kernel_state.cpp
++++ b/src/system/kernel_state.cpp
+@@ -14,8 +14,14 @@
+ #include <filesystem>
+ #include <string>
+ 
++#include <rex/platform.h>
++#if !REX_PLATFORM_WIN32
++#include <dlfcn.h>
++#endif
++
+ #include <fmt/format.h>
+ #include <rex/assert.h>
++#include <rex/filesystem.h>
+ #include <rex/image_info.h>
+ #include <rex/logging.h>
+ #include <rex/math.h>
+@@ -759,9 +765,22 @@ object_ref<UserModule> KernelState::LoadUserModule(const std::string_view raw_na
+     }
+ 
+     rex::platform::DynamicLibrary library_local;
+-    if (!library_local.Load(std::filesystem::path(recomp->shared_lib_name),
+-                            rex::platform::SymbolResolution::kImmediate)) {
++#if REX_PLATFORM_WIN32
++    const std::filesystem::path library_path(recomp->shared_lib_name);
++#else
++    // CMake names the module's SHARED library lib<name>.so and puts it beside
++    // the executable; dlopen does not add the prefix and suffix, nor search
++    // the executable's folder.
++    const std::filesystem::path library_path =
++        rex::filesystem::GetExecutableFolder() / ("lib" + recomp->shared_lib_name + ".so");
++#endif
++    if (!library_local.Load(library_path, rex::platform::SymbolResolution::kImmediate)) {
++#if REX_PLATFORM_WIN32
+       REXSYS_ERROR("Failed to load shared library for module '{}'", recomp->pe_name);
++#else
++      REXSYS_ERROR("Failed to load shared library for module '{}': {}", recomp->pe_name,
++                   dlerror());
++#endif
+     } else {
+       auto register_func = reinterpret_cast<runtime::FunctionDispatcher::RegisterFn>(
+           library_local.GetRawSymbol("ReXModule_Register"));

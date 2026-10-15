@@ -1,0 +1,90 @@
+From 730db26957d7c827eb9aeefed5ea0c5c8dc8ba3c Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Kenan=20Kasumovi=C4=87?=
+ <46025606+Ken5998@users.noreply.github.com>
+Date: Thu, 15 Oct 2026 15:43:12 +0000
+Subject: [PATCH 7/8] fix(linux): build restreet's sdk patch outside windows on
+ arm64
+
+ReStreet's patches/rexglue-local-changes.patch has two spots that only
+build on Windows x86-64:
+
+- game_ui_fonts seeks with _fseeki64; elsewhere it is fseeko.
+- the critical section spin in xboxkrnl_rtl includes immintrin.h and
+  calls _mm_pause unconditionally. It is now x86-64 only, and aarch64
+  spins with yield, as do the frame pacing and clock spins (which had
+  no pause at all there).
+---
+ src/core/clock.cpp                   | 2 ++
+ src/kernel/xboxkrnl/xboxkrnl_rtl.cpp | 6 ++++++
+ src/system/function_dispatcher.cpp   | 2 ++
+ src/ui/game_ui_fonts.cpp             | 4 ++++
+ 4 files changed, 14 insertions(+)
+
+diff --git a/src/core/clock.cpp b/src/core/clock.cpp
+index 7181765..1458b71 100644
+--- a/src/core/clock.cpp
++++ b/src/core/clock.cpp
+@@ -198,6 +198,8 @@ uint64_t Clock::QueryGuestTickCount() {
+     ++rapid_calls;
+ #if defined(__x86_64__) || defined(_M_X64)
+     _mm_pause();
++#elif defined(__aarch64__)
++    __asm__ __volatile__("yield");
+ #endif
+ #if defined(_WIN32)
+     if ((rapid_calls & 0xFF) == 0) {
+diff --git a/src/kernel/xboxkrnl/xboxkrnl_rtl.cpp b/src/kernel/xboxkrnl/xboxkrnl_rtl.cpp
+index bc6d50a..aa430fd 100644
+--- a/src/kernel/xboxkrnl/xboxkrnl_rtl.cpp
++++ b/src/kernel/xboxkrnl/xboxkrnl_rtl.cpp
+@@ -13,7 +13,9 @@
+ #pragma GCC diagnostic ignored "-Wunused-parameter"
+ 
+ #include <algorithm>
++#if defined(__x86_64__) || defined(_M_X64)
+ #include <immintrin.h>
++#endif
+ #include <string>
+ 
+ #include <rex/chrono/chrono_steady_cast.h>
+@@ -399,7 +401,11 @@ void RtlEnterCriticalSection_entry(ppc_ptr_t<X_RTL_CRITICAL_SECTION> cs) {
+       cs->recursion_count = 1;
+       return;
+     }
++#if defined(__x86_64__) || defined(_M_X64)
+     _mm_pause();
++#elif defined(__aarch64__)
++    __asm__ __volatile__("yield");
++#endif
+   }
+ 
+   if (rex::thread::atomic_inc(&cs->lock_count) != 0) {
+diff --git a/src/system/function_dispatcher.cpp b/src/system/function_dispatcher.cpp
+index 8a47e13..ef94c4e 100644
+--- a/src/system/function_dispatcher.cpp
++++ b/src/system/function_dispatcher.cpp
+@@ -90,6 +90,8 @@ void LimitFrameRate() {
+     while (Clock::now() < next) {
+ #if defined(__x86_64__) || defined(_M_X64)
+       _mm_pause();
++#elif defined(__aarch64__)
++      __asm__ __volatile__("yield");
+ #endif
+     }
+   }
+diff --git a/src/ui/game_ui_fonts.cpp b/src/ui/game_ui_fonts.cpp
+index e637829..d424ba3 100644
+--- a/src/ui/game_ui_fonts.cpp
++++ b/src/ui/game_ui_fonts.cpp
+@@ -36,7 +36,11 @@ uint32_t Le32(const uint8_t* p) {
+ uint16_t Be16(const uint8_t* p) { return uint16_t((p[0] << 8) | p[1]); }
+ 
+ bool ReadAt(FILE* file, uint64_t offset, void* out, size_t size) {
++#if defined(_WIN32)
+   if (_fseeki64(file, static_cast<long long>(offset), SEEK_SET) != 0) return false;
++#else
++  if (fseeko(file, static_cast<off_t>(offset), SEEK_SET) != 0) return false;
++#endif
+   return std::fread(out, 1, size, file) == size;
+ }
+ 

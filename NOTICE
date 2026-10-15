@@ -1,0 +1,44 @@
+fifa-street-arm64
+https://github.com/Ken5998/fifa-street-arm64
+
+Copyright (c) 2026 Kenan Kasumović
+
+Licensed under the MIT License (see LICENSE).
+
+This repository ports ReStreet, FIFA Street (2012) recompiled, by
+SamuelitoDaVila to ARM64 Linux.
+ReStreet: https://github.com/samuelit0davila/fifa-street-pc-port
+Copyright (c) 2026 SAMUELITODAVILA, MIT License; see its CREDITS.md for its
+contributors (among them Emran_Ahm3d).
+The patches in patches/ change ReStreet and its patch of the ReXGlue SDK;
+the scripts download both from their own repositories at build time.
+
+ReXGlue SDK: https://github.com/rexglue/rexglue-sdk
+Copyright (c) 2026, Tom Clay, with portions derived from the Xenia project
+(Copyright (c) 2022, Ben Vanik and Xenia project contributors).
+
+The shader math and shared memory texel buffer changes in patches/sdk (0003,
+0004) are ported from shiftglue-sdk, Pinyon Shift's fork of the ReXGlue SDK:
+https://github.com/arcanite24/shiftglue-sdk, under the same license as the
+ReXGlue SDK. Most of patches/sdk, the scripts, the launcher and
+tools/steam_art.cpp come from the Saints Reborn ARM64 port
+(https://github.com/Ken5998/saints-reborn-arm64) by the same author.
+
+The disc image is read with xiso_extract from Saints Reborn
+(https://github.com/whompay/SaintsReborn, Copyright 2026 Whompay, Apache
+License 2.0), downloaded at build time at the commit and checksum in
+upstream.json; it is not stored here.
+
+The Steam artwork is drawn on the player's machine from the box art, title
+screen and icon in the player's checkout of ReStreet, read with stb_image
+(public domain, from the SDK's thirdparty folder); none of it is stored here.
+
+The toolchain setup follows pinyon-shift-arm64
+(https://github.com/Ken5998/pinyon-shift-arm64) and uses the ARM64 sysroot it
+publishes.
+
+"FIFA", "FIFA Street" and "EA SPORTS" are trademarks of their owners. Neither
+this repository nor ReStreet is affiliated with or endorsed by Electronic
+Arts, FIFA or the rights holders. Nothing here contains the game or any file
+extracted or generated from it, and nothing built from it may be published
+here.

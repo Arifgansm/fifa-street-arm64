@@ -1,0 +1,34 @@
+From bf17f8c45ff40ecd20e7250e0ca7cf184a435543 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Kenan=20Kasumovi=C4=87?=
+ <46025606+Ken5998@users.noreply.github.com>
+Date: Thu, 15 Oct 2026 15:46:59 +0000
+Subject: [PATCH 2/2] perf(linux): turnip without shader preambles on arm64
+
+On ARM64 Linux, IR3_SHADER_DEBUG=nopreamble is set unless the environment
+has it, as Pinyon Shift's Android build does for Turnip on the same Adreno
+GPUs and as the Saints Reborn ARM64 port does.
+---
+ Installer/recomp-template/src/main.cpp | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/Installer/recomp-template/src/main.cpp b/Installer/recomp-template/src/main.cpp
+index 2ae1f3f..a86c811 100644
+--- a/Installer/recomp-template/src/main.cpp
++++ b/Installer/recomp-template/src/main.cpp
+@@ -4,4 +4,16 @@
+ 
+ #include "fifastreet_app.h"
+ 
++#if defined(__linux__) && defined(__aarch64__)
++#include <cstdlib>
++namespace {
++// Turnip, Mesa's Vulkan driver for Adreno GPUs, without shader preambles, as
++// Pinyon Shift's Android build sets on the same GPUs: its many small draws,
++// translated by the same GPU code as this game's, ran faster without them.
++// Set before anything loads the driver; a value in the environment (even an
++// empty one) wins.
++[[maybe_unused]] const int g_turnip_no_preamble = setenv("IR3_SHADER_DEBUG", "nopreamble", 0);
++}  // namespace
++#endif
++
+ REX_DEFINE_APP(fifastreet, FifastreetApp::Create)

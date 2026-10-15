@@ -1,0 +1,47 @@
+# FIFA Street (linux-arm64) settings, made for the Retroid Pocket 6
+# (Adreno 740, 1080p screen). scripts/build.sh puts this beside the game the
+# first time only, so your changes stay. ReStreet's defaults otherwise
+# (its "Balanced" profile, without FXAA).
+
+# Display: the game draws 1280x720 (draw_resolution_scale 1); the window is
+# fullscreen and the image is scaled to the screen. present_effect "fsr" (FSR 1)
+# sharpens the upscale at a small GPU cost; "bilinear" is the lightest.
+video_mode_width = 1280
+video_mode_height = 720
+video_mode_refresh_rate = 60
+fullscreen = true
+draw_resolution_scale_x = 1
+draw_resolution_scale_y = 1
+present_effect = "bilinear"
+swap_post_effect = "none"
+native_2x_msaa = false
+vsync = false
+true_vsync = true
+
+# Game language: 1 English, 3 German, 4 French, 5 Spanish, 6 Italian.
+user_language = 1
+
+# Vulkan
+vulkan_device = -1
+vulkan_allow_present_mode_immediate = false
+vulkan_allow_present_mode_mailbox = true
+vulkan_allow_present_mode_fifo_relaxed = false
+
+# Readback: "some" is ReStreet's default; "full" is the most compatible and
+# slowest, "fast" the fastest (reads the previous frame).
+readback_resolve = "some"
+readback_memexport = true
+readback_memexport_fast = true
+clear_memory_page_state = false
+occlusion_query_enable = false
+async_shader_compilation = false
+execute_unclipped_draw_vs_on_cpu = true
+execute_unclipped_draw_vs_on_cpu_with_scissor = false
+
+# Adreno / Turnip: as in the Saints Reborn ARM64 port, submit once per frame,
+# keep guest memory in one plain buffer read through a texel buffer, and use
+# the lighter vertex math of Pinyon Shift's SDK.
+vulkan_submit_on_primary_buffer_end = false
+vulkan_sparse_shared_memory = false
+vulkan_shared_memory_texel_buffer = true
+spirv_ieee_vertex_math = true

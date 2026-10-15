@@ -1,0 +1,136 @@
+name: ARM64 build
+
+# Builds the ReXGlue SDK the way ReStreet uses it (its pinned commit and
+# patches/rexglue-local-changes.patch, plus patches/sdk/) for linux-arm64
+# with the Vulkan backend, then ReStreet's FIFA Street project (patches/game/)
+# against it, two ways: natively on GitHub's ARM64 runner in a bare Fedora 44
+# (the release ArmadaOS is built on) with only the pinned toolchain, as a
+# handheld would, and cross-compiled on x86-64 Ubuntu as a PC or WSL would.
+#
+# No game files are involved: the game is built with placeholder recompiled
+# code (scripts/placeholder-codegen.py), which checks that the program and its
+# two guest modules compile and link but does not make a game that runs. The
+# launcher (launcher/) is built on the ARM64 runner too, and its window opened
+# on a virtual screen.
+
+on:
+  # Every branch: work reaches main without pull requests, once this is green.
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: ReStreet commit or branch (default the one in upstream.json)
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  native:
+    runs-on: ubuntu-24.04-arm
+    container: registry.fedoraproject.org/fedora:44
+    timeout-minutes: 120
+    steps:
+      # No compilers, CMake or development files, as on ArmadaOS: the pinned
+      # toolchain and sysroot bring them. The SDK's runtime loads the X11 and
+      # Wayland client libraries, which a desktop like ArmadaOS has. jinja2
+      # is only for the placeholder code.
+      - name: Install git, Python, the download tools and the desktop libraries
+        run: >-
+          dnf install -y --setopt=install_weak_deps=False git python3 python3-jinja2 curl tar xz
+          libX11 libX11-xcb libxcb libwayland-client
+      - uses: actions/checkout@v5
+      - name: Fetch the pinned toolchain
+        run: scripts/fetch-toolchain.sh "$RUNNER_TEMP/toolchain"
+      - name: Check out ReStreet and the patched SDK
+        env:
+          REF: ${{ inputs.ref }}
+        run: scripts/prepare.sh "$RUNNER_TEMP/work" ${REF:+"$REF"}
+      - name: Build the SDK
+        run: scripts/build-sdk.sh "$RUNNER_TEMP/work/rexglue-sdk" "$RUNNER_TEMP/toolchain"
+      - name: Build the game with placeholder recompiled code
+        run: |
+          project="$RUNNER_TEMP/work/ReStreet/Installer/recomp-template"
+          scripts/placeholder-codegen.py "$project" "$RUNNER_TEMP/work/rexglue-sdk"
+          scripts/build-game.sh "$project" "$RUNNER_TEMP/work/rexglue-sdk/out/install/linux-arm64" \
+            "$RUNNER_TEMP/toolchain"
+      - name: Check that the program starts and finds its libraries
+        run: |
+          build="$RUNNER_TEMP/work/ReStreet/Installer/recomp-template/out/linux-arm64"
+          cp "$RUNNER_TEMP/work/rexglue-sdk/out/install/linux-arm64/lib/librexruntime.so" "$build/"
+          # No screen here: it gets as far as opening the window.
+          "$build/fifastreet" --help 2>&1 | tee "$RUNNER_TEMP/start.log" || true
+          grep -q "SDL_InitSubSystem" "$RUNNER_TEMP/start.log"
+      - name: Check Add to Steam with a made-up Steam folder
+        run: |
+          python3 tests/add_to_steam_test.py
+          ln -sfn "$RUNNER_TEMP/toolchain" "$RUNNER_TEMP/work/toolchain"
+          mkdir -p "$RUNNER_TEMP/work/game" "$RUNNER_TEMP/home/.local/share/Steam/userdata/1/config"
+          touch "$RUNNER_TEMP/work/game/fifastreet.sh"
+          HOME="$RUNNER_TEMP/home" scripts/add-to-steam.sh "$RUNNER_TEMP/work"
+          ls -l "$RUNNER_TEMP/home/.local/share/Steam/userdata/1/config/grid"
+          test "$(ls "$RUNNER_TEMP/home/.local/share/Steam/userdata/1/config/grid" | wc -l)" = 4
+      - name: Check the start script
+        run: bash -n config/fifastreet.sh && python3 -c 'import tomllib; tomllib.load(open("config/fifastreet.toml", "rb"))'
+
+  cross:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+      - name: Install CMake, Ninja, wayland-scanner, qemu and jinja2
+        run: >-
+          sudo apt-get update -q && sudo apt-get install -y -q cmake ninja-build pkgconf libwayland-bin
+          qemu-user-static file python3-jinja2
+      - uses: actions/checkout@v5
+      - name: Fetch the pinned toolchain
+        run: scripts/fetch-toolchain.sh "$RUNNER_TEMP/toolchain"
+      - name: Check out ReStreet and the patched SDK
+        env:
+          REF: ${{ inputs.ref }}
+        run: scripts/prepare.sh "$RUNNER_TEMP/work" ${REF:+"$REF"}
+      - name: Build the SDK
+        run: scripts/build-sdk.sh "$RUNNER_TEMP/work/rexglue-sdk" "$RUNNER_TEMP/toolchain"
+      - name: Build the game with placeholder recompiled code
+        run: |
+          project="$RUNNER_TEMP/work/ReStreet/Installer/recomp-template"
+          scripts/placeholder-codegen.py "$project" "$RUNNER_TEMP/work/rexglue-sdk"
+          scripts/build-game.sh "$project" "$RUNNER_TEMP/work/rexglue-sdk/out/install/linux-arm64" \
+            "$RUNNER_TEMP/toolchain"
+      - name: Check Add to Steam with a made-up Steam folder
+        run: |
+          python3 tests/add_to_steam_test.py
+          ln -sfn "$RUNNER_TEMP/toolchain" "$RUNNER_TEMP/work/toolchain"
+          mkdir -p "$RUNNER_TEMP/work/game" "$RUNNER_TEMP/home/.local/share/Steam/userdata/1/config"
+          touch "$RUNNER_TEMP/work/game/fifastreet.sh"
+          HOME="$RUNNER_TEMP/home" scripts/add-to-steam.sh "$RUNNER_TEMP/work"
+          test "$(ls "$RUNNER_TEMP/home/.local/share/Steam/userdata/1/config/grid" | wc -l)" = 4
+
+  launcher:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install Rust, and a virtual screen with OpenGL for the window
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q xvfb libgl1-mesa-dri libegl1 libxkbcommon-x11-0 libxcursor1 libxrandr2 libxi6
+          command -v cargo || curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+      - name: Test and build the launcher
+        run: |
+          cargo test --release --locked --manifest-path launcher/Cargo.toml
+          scripts/package-launcher.sh out
+          tar -tzvf out/FifaStreet-Launcher-linux-arm64.tar.gz
+      - name: Open the launcher window
+        run: |
+          # Still open after 10 seconds (timeout ends it with 124): it started.
+          status=0
+          HOME="$RUNNER_TEMP/home" xvfb-run -a -s "-screen 0 860x620x24" \
+            timeout 10 launcher/target/release/fifastreet-launcher || status=$?
+          test "$status" = 124
