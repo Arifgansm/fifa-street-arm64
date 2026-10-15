@@ -30,6 +30,13 @@ export REX_VSYNC=false
 # the video mode's refresh rate, as with VSync on in ReStreet's launcher.
 : "${REX_FRAME_LIMITER_MIN_HZ:=auto}"
 export REX_FRAME_LIMITER_MIN_HZ
+# "auto" reads the rate from the environment only, as the launcher passes it;
+# take it from fifastreet.toml (60 if it is not there).
+if [ -z "${REX_VIDEO_MODE_REFRESH_RATE:-}" ]; then
+    REX_VIDEO_MODE_REFRESH_RATE="$(sed -n 's/^[[:space:]]*video_mode_refresh_rate[[:space:]]*=[[:space:]]*\([0-9.]*\).*/\1/p' \
+        "$here/fifastreet.toml" 2>/dev/null | head -n1)"
+    export REX_VIDEO_MODE_REFRESH_RATE="${REX_VIDEO_MODE_REFRESH_RATE:-60}"
+fi
 # Keep only the one synchronous readback that keeps stadium floors clean.
 unset REX_READBACK_SOME_SYNC_ADDRS
 export REX_READBACK_SOME_SYNC_BELOW=0
