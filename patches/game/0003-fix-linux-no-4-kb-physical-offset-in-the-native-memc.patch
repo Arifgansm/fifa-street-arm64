@@ -1,0 +1,30 @@
+From 838092e69758a355c364f9a07f1fc40959ea388d Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Kenan=20Kasumovi=C4=87?=
+ <46025606+Ken5998@users.noreply.github.com>
+Date: Thu, 15 Oct 2026 21:45:54 +0000
+Subject: [PATCH] fix(linux): no 4 kb physical offset in the native memcpy,
+ memset and memmove
+
+---
+ Installer/recomp-template/src/native_libc_hooks.cpp | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/Installer/recomp-template/src/native_libc_hooks.cpp b/Installer/recomp-template/src/native_libc_hooks.cpp
+index af48eac..2e00f37 100644
+--- a/Installer/recomp-template/src/native_libc_hooks.cpp
++++ b/Installer/recomp-template/src/native_libc_hooks.cpp
+@@ -28,8 +28,10 @@ bool HooksEnabled() {
+   return enabled;
+ }
+ 
++// The 0xE0000000 physical alias sits 4 KB higher on hosts that map memory in
++// blocks larger than 4 KB (Windows); on Linux it does not. GuestPtr knows which.
+ inline uint8_t* HostAddress(uint8_t* base, uint32_t address) {
+-  return base + address + (address >= 0xE0000000u ? 0x1000u : 0u);
++  return rex::memory::GuestPtr(base, address);
+ }
+ 
+ // True when [address, address + size) is ordinary guest RAM that host code may touch directly.
+-- 
+2.43.0
+

@@ -1,0 +1,83 @@
+From f78209539885a0b8ccad057eeab787533be1307d Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Kenan=20Kasumovi=C4=87?=
+ <46025606+Ken5998@users.noreply.github.com>
+Date: Thu, 15 Oct 2026 21:45:20 +0000
+Subject: [PATCH] fix(posix): pass on a fault no handler takes instead of
+ retrying it forever
+
+---
+ src/core/exception_handler_posix.cpp | 51 ++++++++++++++++++++++++++++
+ 1 file changed, 51 insertions(+)
+
+diff --git a/src/core/exception_handler_posix.cpp b/src/core/exception_handler_posix.cpp
+index 12f238c..9230b9d 100644
+--- a/src/core/exception_handler_posix.cpp
++++ b/src/core/exception_handler_posix.cpp
+@@ -19,6 +19,7 @@
+ 
+ #if REX_PLATFORM_LINUX || REX_PLATFORM_MAC
+ 
++#include <dlfcn.h>
+ #include <signal.h>
+ 
+ #include <cstdint>
+@@ -446,6 +447,56 @@ static void ExceptionHandlerCallback(int signal_number, siginfo_t* signal_info,
+       return;
+     }
+   }
++
++  // Nothing here handled it. Returning would run the same instruction again
++  // and fault forever (a hung game filling its log), so pass it on, as
++  // Windows continues the search: to the handler installed before this one,
++  // which is the SEH emulation (it throws into the guest's __except when the
++  // fault is inside one), or else the default action, which ends the process.
++  uintptr_t fault_pc = 0;
++#if REX_ARCH_AMD64
++  fault_pc = uintptr_t(thread_context.rip);
++#elif REX_ARCH_ARM64
++  fault_pc = uintptr_t(thread_context.pc);
++#endif
++  Dl_info fault_info{};
++  if (dladdr(reinterpret_cast<void*>(fault_pc), &fault_info) && fault_info.dli_fname) {
++    REXLOG_ERROR("Unhandled signal {} at {}+0x{:X} ({}), fault address {:p}", signal_number,
++                 fault_info.dli_fname, fault_pc - uintptr_t(fault_info.dli_fbase),
++                 fault_info.dli_sname ? fault_info.dli_sname : "?",
++                 signal_info ? signal_info->si_addr : nullptr);
++  } else {
++    REXLOG_ERROR("Unhandled signal {} at 0x{:X}, fault address {:p}", signal_number, fault_pc,
++                 signal_info ? signal_info->si_addr : nullptr);
++  }
++  rex::FlushLogging();
++  const struct sigaction* original = nullptr;
++  switch (signal_number) {
++    case SIGILL:
++      original = &original_sigill_handler_;
++      break;
++    case SIGSEGV:
++      original = &original_sigsegv_handler_;
++      break;
++#if REX_PLATFORM_MAC
++    case SIGBUS:
++      original = &original_sigbus_handler_;
++      break;
++#endif
++    default:
++      break;
++  }
++  if (original && (original->sa_flags & SA_SIGINFO) && original->sa_sigaction) {
++    original->sa_sigaction(signal_number, signal_info, signal_context);
++    return;
++  }
++  if (original && original->sa_handler != SIG_DFL && original->sa_handler != SIG_IGN) {
++    original->sa_handler(signal_number);
++    return;
++  }
++  // The default action: the instruction faults again once this returns, with
++  // nothing left to catch it.
++  signal(signal_number, SIG_DFL);
+ }
+ 
+ void ExceptionHandler::Install(Handler fn, void* data) {
+-- 
+2.43.0
+
