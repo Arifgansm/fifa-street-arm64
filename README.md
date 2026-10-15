@@ -52,6 +52,8 @@ versions may not recompile or run correctly.
 
 ### With the launcher
 
+![The launcher with a disc image found in Downloads](docs/launcher-setup.png)
+
 1. In Desktop Mode, download `FifaStreet-Launcher-linux-arm64.tar.gz` from
    [Releases](https://github.com/Ken5998/fifa-street-arm64/releases/latest)
    and unpack it.

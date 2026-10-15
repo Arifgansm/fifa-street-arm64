@@ -152,7 +152,7 @@ impl LauncherApp {
                 ui.label(RichText::new("○ Not built yet").strong());
                 ui.label(
                     RichText::new(
-                        "The first build can take an hour or more on a handheld and needs about 40 GB free. \
+                        "The first build can take an hour or more on a handheld and needs about 30 GB free. \
                          Keep it plugged in.",
                     )
                     .weak(),
@@ -316,7 +316,7 @@ impl eframe::App for LauncherApp {
                         self.paths.data.display()
                     );
                     if !self.paths.built() && free < tasks::BUILD_SPACE {
-                        ui.colored_label(ERROR, format!("{text}: the first build needs about 40 GB."));
+                        ui.colored_label(ERROR, format!("{text}: the first build needs about 30 GB."));
                     } else {
                         ui.label(RichText::new(text).weak());
                     }
