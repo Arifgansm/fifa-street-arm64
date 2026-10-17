@@ -1,0 +1,56 @@
+From d9120335461b48849f9698419d6a176e26f27c0e Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Kenan=20Kasumovi=C4=87?=
+ <46025606+Ken5998@users.noreply.github.com>
+Date: Sat, 17 Oct 2026 21:33:28 +0000
+Subject: [PATCH] fix(codegen): keep the external codegen option in
+ rexglue.cmake
+
+codegen rewrites generated/rexglue.cmake from its template whenever
+they differ, so the REXGLUE_EXTERNAL_CODEGEN option a project added
+there was dropped on the first run, and the build then ran codegen a
+second time. The template now carries the option (off by default).
+---
+ resources/templates/init/rexglue_cmake.inja | 30 +++++++++++++--------
+ 1 file changed, 19 insertions(+), 11 deletions(-)
+
+diff --git a/resources/templates/init/rexglue_cmake.inja b/resources/templates/init/rexglue_cmake.inja
+index f39557b..d558663 100644
+--- a/resources/templates/init/rexglue_cmake.inja
++++ b/resources/templates/init/rexglue_cmake.inja
+@@ -114,17 +114,25 @@ endmacro()
+ # codegen, including one a project assembles itself rather than taking the
+ # library rexglue_setup_target() builds. The stamp comes first: the DEPFILE
+ # names it.
+-add_custom_command(
+-    OUTPUT "{{ cmake_var("CMAKE_CURRENT_SOURCE_DIR") }}/{{ entrypoint_out_dir }}/codegen.build.stamp"
+-           {{ cmake_var("REXGLUE_ENTRYPOINT_GENERATED_SOURCES") }}
+-    COMMAND $<TARGET_FILE:rex::rexglue> codegen {{ cmake_var("CMAKE_CURRENT_SOURCE_DIR") }}/{{ names.snake_case }}_manifest.toml
+-    DEPFILE "{{ cmake_var("CMAKE_CURRENT_SOURCE_DIR") }}/{{ entrypoint_out_dir }}/codegen.d"
+-    WORKING_DIRECTORY {{ cmake_var("CMAKE_CURRENT_SOURCE_DIR") }}
+-    COMMENT "Generating recompiled code for {{ names.snake_case }}"
+-    VERBATIM
+-)
+-add_custom_target({{ names.snake_case }}_codegen
+-    DEPENDS "{{ cmake_var("CMAKE_CURRENT_SOURCE_DIR") }}/{{ entrypoint_out_dir }}/codegen.build.stamp")
++# REXGLUE_EXTERNAL_CODEGEN: the code is generated before configuring (the
++# linux-arm64 build runs rexglue itself, under qemu when cross-compiling),
++# so the build does not run it again.
++option(REXGLUE_EXTERNAL_CODEGEN "Code generated before configuring; do not run codegen in the build" OFF)
++if(REXGLUE_EXTERNAL_CODEGEN)
++    add_custom_target({{ names.snake_case }}_codegen)
++else()
++    add_custom_command(
++        OUTPUT "{{ cmake_var("CMAKE_CURRENT_SOURCE_DIR") }}/{{ entrypoint_out_dir }}/codegen.build.stamp"
++               {{ cmake_var("REXGLUE_ENTRYPOINT_GENERATED_SOURCES") }}
++        COMMAND $<TARGET_FILE:rex::rexglue> codegen {{ cmake_var("CMAKE_CURRENT_SOURCE_DIR") }}/{{ names.snake_case }}_manifest.toml
++        DEPFILE "{{ cmake_var("CMAKE_CURRENT_SOURCE_DIR") }}/{{ entrypoint_out_dir }}/codegen.d"
++        WORKING_DIRECTORY {{ cmake_var("CMAKE_CURRENT_SOURCE_DIR") }}
++        COMMENT "Generating recompiled code for {{ names.snake_case }}"
++        VERBATIM
++    )
++    add_custom_target({{ names.snake_case }}_codegen
++        DEPENDS "{{ cmake_var("CMAKE_CURRENT_SOURCE_DIR") }}/{{ entrypoint_out_dir }}/codegen.build.stamp")
++endif()
+ 
+ # Include DLL module shared library targets if codegen has generated them
+ if(EXISTS "{{ cmake_var("CMAKE_CURRENT_SOURCE_DIR") }}/{{ entrypoint_out_dir }}/dll_targets.cmake")
