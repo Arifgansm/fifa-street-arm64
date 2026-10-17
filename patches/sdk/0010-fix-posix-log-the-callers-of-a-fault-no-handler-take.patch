@@ -1,0 +1,59 @@
+From 790f716add0fde81b28768985d79045e6e8523e2 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Kenan=20Kasumovi=C4=87?=
+ <46025606+Ken5998@users.noreply.github.com>
+Date: Sat, 17 Oct 2026 19:36:12 +0000
+Subject: [PATCH] fix(posix): log the callers of a fault no handler takes
+
+The unhandled fault line names only the instruction that faulted. Its
+callers, from the frame records (x29 chain, x30 first for a leaf
+function), follow it as module+offset lines, so the guest functions that
+led to a crash can be named from the game's symbol table.
+---
+ src/core/exception_handler_posix.cpp | 34 ++++++++++++++++++++++++++++
+ 1 file changed, 34 insertions(+)
+
+diff --git a/src/core/exception_handler_posix.cpp b/src/core/exception_handler_posix.cpp
+index 9230b9d..4ab456c 100644
+--- a/src/core/exception_handler_posix.cpp
++++ b/src/core/exception_handler_posix.cpp
+@@ -469,6 +469,40 @@ static void ExceptionHandlerCallback(int signal_number, siginfo_t* signal_info,
+     REXLOG_ERROR("Unhandled signal {} at 0x{:X}, fault address {:p}", signal_number, fault_pc,
+                  signal_info ? signal_info->si_addr : nullptr);
+   }
++#if REX_ARCH_ARM64
++  // The callers, through the frame records (x29 chain): with the symbol table
++  // of the module (scripts/crash-info.py) they name the guest functions that
++  // led here. x30 first, for a leaf function that has no frame record.
++  {
++    auto log_frame = [](const char* what, uintptr_t address) {
++      Dl_info info{};
++      if (dladdr(reinterpret_cast<void*>(address), &info) && info.dli_fname) {
++        REXLOG_ERROR("  {} {}+0x{:X}", what, info.dli_fname,
++                     address - uintptr_t(info.dli_fbase));
++      } else {
++        REXLOG_ERROR("  {} 0x{:X}", what, address);
++      }
++    };
++    log_frame("lr", uintptr_t(thread_context.x[30]));
++    const uintptr_t sp = uintptr_t(thread_context.sp);
++    uintptr_t fp = uintptr_t(thread_context.x[29]);
++    for (int depth = 0; depth < 16; ++depth) {
++      // A frame record lives on this stack, above sp, 16-byte aligned.
++      if (fp < sp || fp - sp > (uintptr_t(64) << 20) || (fp & 15)) {
++        break;
++      }
++      const auto* record = reinterpret_cast<const uintptr_t*>(fp);
++      if (!record[1]) {
++        break;
++      }
++      log_frame("at", record[1]);
++      if (record[0] <= fp) {
++        break;
++      }
++      fp = record[0];
++    }
++  }
++#endif
+   rex::FlushLogging();
+   const struct sigaction* original = nullptr;
+   switch (signal_number) {
