@@ -43,5 +43,11 @@ export REX_READBACK_SOME_SYNC_BELOW=0
 export REX_VULKAN_READBACK_SHORT_WAIT=true
 export REX_VULKAN_READBACK_SPIN_US=500
 export REX_LOG_FILE="$here/Logs/fifastreet.log"
+# Turnip's framebuffer compression (UBWC) on the game's images makes what
+# gamescope draws over it (MangoHud, the Steam overlay and menu) flicker and
+# pixelate. A TU_DEBUG in the environment wins, even an empty one.
+if [ -z "${TU_DEBUG+set}" ]; then
+    export TU_DEBUG=noubwc
+fi
 
 exec "$here/fifastreet" --game_data_root="$here/../GameData" "$@"
