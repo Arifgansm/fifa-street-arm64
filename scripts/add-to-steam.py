@@ -88,16 +88,26 @@ def steam_roots(home: Path) -> list[Path]:
 
 
 def steam_running() -> bool:
-    """Whether the Steam client runs: ArmadaOS's ARM64 client
-    (steamrtarm64/steam) or the x86 one (ubuntu12_32/steam, second in the
-    command line under FEX)."""
+    """Whether a Steam client process of this user runs: ArmadaOS's ARM64
+    client (steamrtarm64/steam), the x86 one under FEX (ubuntu12_32/steam) or
+    its helpers. Told by the executable rather than the command line, which
+    can be relative (./steam) after Steam restarts itself: a Steam that was
+    missed keeps its own copy of the library and writes it back later,
+    without the game."""
+    names = {"steam", "steamwebhelper", "steamservice"}
     for proc in Path("/proc").iterdir():
         if not proc.name.isdigit() or int(proc.name) == os.getpid():
             continue
         try:
+            if proc.stat().st_uid != os.getuid():
+                continue
+            exe = os.readlink(proc / "exe").removesuffix(" (deleted)")
             command = (proc / "cmdline").read_bytes().split(b"\0")[:2]
         except OSError:
             continue
+        if Path(exe).name in names:
+            return True
+        # FEX runs the x86 client: the executable is FEX, the client is in argv.
         if any(part.endswith((b"/steamrtarm64/steam", b"/ubuntu12_32/steam")) for part in command):
             return True
     return False
