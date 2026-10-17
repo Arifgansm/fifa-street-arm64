@@ -169,6 +169,7 @@ mkdir -p "$game"
 cp -f "$build/fifastreet" "$build"/libfifastreet_*_xex.so \
     "$sdk/lib/librexruntime.so" "$sdk/lib/librexgpu-xenos.so" "$game/"
 install -m 755 "$repo/config/fifastreet.sh" "$game/fifastreet.sh"
+install -m 644 "$repo/config/perf-sampler.py" "$game/perf-sampler.py"
 # Your settings stay; the RP6 defaults go in only the first time.
 [ -f "$game/fifastreet.toml" ] || cp "$repo/config/fifastreet.toml" "$game/fifastreet.toml"
 

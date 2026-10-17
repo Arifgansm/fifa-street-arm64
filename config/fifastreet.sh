@@ -44,4 +44,10 @@ export REX_VULKAN_READBACK_SHORT_WAIT=true
 export REX_VULKAN_READBACK_SPIN_US=500
 export REX_LOG_FILE="$here/Logs/fifastreet.log"
 
+# With a file named perf_log next to the game, Logs/perf.log gets the CPU use
+# of the game's busiest threads every 5 seconds (perf-sampler.py). The game
+# keeps this script's process id, which exec hands it.
+if [ -e "$here/perf_log" ] && [ -f "$here/perf-sampler.py" ] && command -v python3 >/dev/null; then
+    python3 -I "$here/perf-sampler.py" "$$" "$here/Logs/perf.log" </dev/null >/dev/null 2>&1 &
+fi
 exec "$here/fifastreet" --game_data_root="$here/../GameData" "$@"
