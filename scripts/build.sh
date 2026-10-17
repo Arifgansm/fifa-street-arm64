@@ -38,7 +38,7 @@ game="$dir/game"
 stamps="$dir/.stamps"
 mkdir -p "$stamps"
 
-step() { printf '\n==> %s\n' "$*"; }
+step() { printf '\n==> [%s] %s\n' "$(date +%H:%M:%S)" "$*"; }
 key() { cat "$@" | sha256sum | cut -d' ' -f1; }  # key FILE...: a hash of their contents
 done_with() { [ -f "$stamps/$1" ] && [ "$(cat "$stamps/$1")" = "$2" ]; }
 mark() { echo "$2" > "$stamps/$1"; }
@@ -185,7 +185,7 @@ if [ "${FS_ADD_TO_STEAM:-1}" = 1 ] && [ ${#run[@]} -eq 0 ]; then
 fi
 
 echo
-echo "Done! FIFA Street is in $game."
+echo "Done at $(date +%H:%M:%S)! FIFA Street is in $game."
 if [ "$steam" = yes ]; then
     echo "Play it from Steam (\"FIFA Street\" in the library): the handheld's controls reach it only from there."
 else
