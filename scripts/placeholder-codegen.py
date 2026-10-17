@@ -64,7 +64,7 @@ def named_functions(sources):
 src = project_dir / "src"
 modules = [
     # (output folder, is a DLL, image base, sources that name its functions)
-    ("default", False, 0x82000000, [src / "main.cpp", src / f"{project}_app.h"]),
+    ("default", False, 0x82000000, [src / "main.cpp", src / f"{project}_app.h", src / "startup_race_hooks.cpp"]),
     ("fifadllzf_xex", True, 0x86000000, [src / "stubs.cpp", src / "native_libc_hooks.cpp"]),
     ("FootballCompEngzf_xex", True, 0x8A000000, []),
 ]
