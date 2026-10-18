@@ -991,6 +991,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "fifastreet-launcher"
+version = "0.2.0"
+dependencies = [
+ "eframe",
+ "libc",
+ "rfd",
+]
+
+[[package]]
 name = "find-msvc-tools"
 version = "0.1.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2442,15 +2451,6 @@ name = "rustversion"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf54715a573b99ac80df0bc206da022bcd442c974952c7b9720069370852e21f"
-
-[[package]]
-name = "fifastreet-launcher"
-version = "0.1.0"
-dependencies = [
- "eframe",
- "libc",
- "rfd",
-]
 
 [[package]]
 name = "same-file"
