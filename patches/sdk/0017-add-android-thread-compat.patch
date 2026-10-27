@@ -1,0 +1,118 @@
+diff --git a/include/rex/thread/compat.h b/include/rex/thread/compat.h
+new file mode 100644
+--- /dev/null
++++ b/include/rex/thread/compat.h
+@@ -0,0 +1,95 @@
++/**
++ ******************************************************************************
++ * Xenia : Xbox 360 Emulator Research Project                                 *
++ ******************************************************************************
++ * Copyright 2020 Ben Vanik. All rights reserved.                             *
++ * Released under the BSD license - see LICENSE in the root for more details. *
++ ******************************************************************************
++ *\n
++ * @modified    2026 - Android C++20 thread polyfills
++ */
++
++#pragma once
++
++#include <atomic>
++#include <condition_variable>
++#include <functional>
++#include <mutex>
++#include <thread>
++
++namespace std {
++
++#ifdef __ANDROID__
++
++// stop_token polyfill for Android (C++20 feature not in NDK libc++)
++class stop_token {
++ public:
++  stop_token() noexcept = default;
++  stop_token(const stop_token&) noexcept = default;
++  stop_token& operator=(const stop_token&) noexcept = default;
++  ~stop_token() = default;
++
++  [[nodiscard]] bool stop_requested() const noexcept { return false; }
++  [[nodiscard]] bool stop_possible() const noexcept { return false; }
++
++  friend bool operator==(const stop_token&, const stop_token&) noexcept { return true; }
++};
++
++class stop_source {
++ public:
++  stop_source() noexcept = default;
++  stop_source(const stop_source&) noexcept = default;
++  stop_source& operator=(const stop_source&) noexcept = default;
++  ~stop_source() = default;
++
++  [[nodiscard]] stop_token get_token() const noexcept { return stop_token(); }
++  [[nodiscard]] bool stop_requested() const noexcept { return false; }
++  bool request_stop() noexcept { return false; }
++};
++
++// jthread polyfill for Android (C++20 feature not in NDK libc++)
++template <typename Function, typename... Args>
++class jthread {
++ public:
++  using id = std::thread::id;
++
++  jthread() noexcept = default;
++
++  explicit jthread(Function&& f, Args&&... args) {
++    thread_ = std::thread(std::forward<Function>(f), std::forward<Args>(args)...);
++  }
++
++  jthread(jthread&& other) noexcept : thread_(std::move(other.thread_)) {}
++
++  jthread& operator=(jthread&& other) noexcept {
++    if (joinable()) {
++      request_stop();
++      join();
++    }
++    thread_ = std::move(other.thread_);
++    return *this;
++  }
++
++  ~jthread() {
++    if (joinable()) {
++      request_stop();
++      join();
++    }
++  }
++
++  void swap(jthread& other) noexcept { thread_.swap(other.thread_); }
++
++  [[nodiscard]] bool joinable() const noexcept { return thread_.joinable(); }
++  void join() { thread_.join(); }
++  void detach() { thread_.detach(); }
++
++  [[nodiscard]] id get_id() const noexcept { return thread_.get_id(); }
++  [[nodiscard]] std::thread::native_handle_type native_handle() { return thread_.native_handle(); }
++
++  void request_stop() noexcept {}
++  [[nodiscard]] stop_token get_stop_token() const noexcept { return stop_token(); }
++
++ private:
++  std::thread thread_;
++};
++
++#endif // __ANDROID__
++
++}  // namespace std
+diff --git a/src/core/timer_queue.cpp b/src/core/timer_queue.cpp
+index 5cfea05..4806569 100644
+--- a/src/core/timer_queue.cpp
++++ b/src/core/timer_queue.cpp
+@@ -21,6 +21,10 @@
+ #include <rex/thread.h>
+ #include <rex/thread/timer_queue.h>
+ 
++#ifdef __ANDROID__
++#include <rex/thread/compat.h>
++#endif
++
+ namespace dp = disruptorplus;
+ 
+ namespace rex::thread {
