@@ -92,7 +92,11 @@ jobs:
           arch="-march=armv8.2-a+rcpc -mtune=cortex-a715"
           SOURCE_DATE_EPOCH="$(git -C "$sdk_src" log -1 --format=%ct 2>/dev/null || echo 0)"
           export SOURCE_DATE_EPOCH
-          
+
+          # Debug: verify patch was applied
+          echo "=== Checking patched file ==="
+          grep -n "ANDROID" "$sdk_src/src/ui/CMakeLists.txt" | head -5
+
           cmake -S "$sdk_src" -B "$sdk_src/out/build/android-arm64" -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_TOOLCHAIN_FILE="$ndk_toolchain" \
