@@ -1,0 +1,51 @@
+diff --git a/include/rex/string/numeric.h b/include/rex/string/numeric.h
+index 85994c7..5f73adf 100644
+--- a/include/rex/string/numeric.h
++++ b/include/rex/string/numeric.h
+@@ -160,6 +160,46 @@ inline std::from_chars_result portable_float_from_chars(const char* first, const
+   value = parsed_value;
+   return {first + (end - buffer), std::errc()};
+ }
++#elif defined(__ANDROID__)
++template <typename T>
++inline std::from_chars_result portable_float_from_chars(const char* first, const char* last,
++                                                        T& value) {
++  static_assert(std::is_same_v<T, float> || std::is_same_v<T, double>);
++
++  // Android's libc++ may not provide floating-point std::from_chars.
++  // Match from_chars semantics with a C-locale parser:
++  // no leading whitespace or '+', no global locale dependency, and distinct
++  // invalid-input and range errors.
++  if (first == last || *first == '+' || *first == ' ' || *first == '\f' || *first == '\n' ||
++      *first == '\r' || *first == '\t' || *first == '\v') {
++    return {first, std::errc::invalid_argument};
++  }
++
++  const size_t len = static_cast<size_t>(last - first);
++  char buffer[128];
++  if (len >= sizeof(buffer)) {
++    return {first, std::errc::result_out_of_range};
++  }
++  std::memcpy(buffer, first, len);
++  buffer[len] = '\0';
++
++  char* end = nullptr;
++  errno = 0;
++  T parsed_value;
++  if constexpr (std::is_same_v<T, float>) {
++    parsed_value = strtof(buffer, &end);
++  } else {
++    parsed_value = strtod(buffer, &end);
++  }
++  if (errno == ERANGE) {
++    return {first, std::errc::result_out_of_range};
++  }
++  if (end == buffer) {
++    return {first, std::errc::invalid_argument};
++  }
++  value = parsed_value;
++  return {first + (end - buffer), std::errc{}};
++}
+ #endif
+ 
+ // floating_point_from_string
