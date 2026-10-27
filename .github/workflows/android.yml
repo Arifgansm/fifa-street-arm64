@@ -52,8 +52,8 @@ jobs:
           yes | sdkmanager --licenses > /dev/null 2>&1 || true
           sdkmanager "platform-tools" "platforms;android-35" "build-tools;36.0.0" > /dev/null
           
-          # Download NDK r26d directly (more reliable than sdkmanager for CI)
-          NDK_VERSION="r26d"
+          # Download NDK r27 directly (has Clang 18+ required by ReXGlue)
+          NDK_VERSION="r27d"
           NDK_URL="https://dl.google.com/android/repository/android-ndk-${NDK_VERSION}-linux.zip"
           echo "Downloading NDK $NDK_VERSION from $NDK_URL"
           wget -q "$NDK_URL" -O /tmp/ndk.zip
@@ -79,9 +79,9 @@ jobs:
 
       - name: Build ReXGlue SDK for Android (NDK)
         env:
-          ANDROID_NDK: /opt/android-ndk-r26d
+          ANDROID_NDK: /opt/android-ndk-r27d
         run: |
-          export ANDROID_NDK="/opt/android-ndk-r26d"
+          export ANDROID_NDK="/opt/android-ndk-r27d"
           export ANDROID_SDK="/home/runner/android-sdk"
           repo=$(pwd)
           cd "$RUNNER_TEMP/work"
@@ -116,10 +116,10 @@ jobs:
 
       - name: Build SDL3 for Android
         env:
-          ANDROID_NDK: /opt/android-ndk-r26d
+          ANDROID_NDK: /opt/android-ndk-r27d
           ANDROID_SDK: /home/runner/android-sdk
         run: |
-          export ANDROID_NDK="/opt/android-ndk-r26d"
+          export ANDROID_NDK="/opt/android-ndk-r27d"
           export ANDROID_SDK="/home/runner/android-sdk"
           ndk_toolchain="$ANDROID_NDK/build/cmake/android.toolchain.cmake"
           
@@ -165,10 +165,10 @@ jobs:
 
       - name: Build game for Android
         env:
-          ANDROID_NDK: /opt/android-ndk-r26d
+          ANDROID_NDK: /opt/android-ndk-r27d
           ANDROID_SDK: /home/runner/android-sdk
         run: |
-          export ANDROID_NDK="/opt/android-ndk-r26d"
+          export ANDROID_NDK="/opt/android-ndk-r27d"
           export ANDROID_SDK="/home/runner/android-sdk"
           ndk_toolchain="$ANDROID_NDK/build/cmake/android.toolchain.cmake"
           
@@ -199,7 +199,7 @@ jobs:
 
       - name: Copy native libraries to Android project
         env:
-          ANDROID_NDK: /opt/android-ndk-r26d
+          ANDROID_NDK: /opt/android-ndk-r27d
         run: |
           prebuilt="android/app/src/main/jniLibs/arm64-v8a"
           rm -rf "$prebuilt"
@@ -250,7 +250,7 @@ jobs:
             :app:assembleRelease \
             --no-daemon \
             -Dorg.gradle.jvmargs="-Xmx2048m" \
-            -Pndk.dir="/opt/android-ndk-r26d"
+            -Pndk.dir="/opt/android-ndk-r27d"
           
           apk_path=$(find app/build/outputs/apk -name "*.apk" -type f | head -1)
           echo "APK: $apk_path"
