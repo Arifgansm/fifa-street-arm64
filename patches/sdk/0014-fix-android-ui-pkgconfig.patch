@@ -2,7 +2,7 @@ diff --git a/src/ui/CMakeLists.txt b/src/ui/CMakeLists.txt
 index abcdefg..hijklmn 100644
 --- a/src/ui/CMakeLists.txt
 +++ b/src/ui/CMakeLists.txt
-@@ -146,7 +146,7 @@ endif()
+@@ -143,7 +143,7 @@ endif()
  )
  
  # Platform-specific dependencies
