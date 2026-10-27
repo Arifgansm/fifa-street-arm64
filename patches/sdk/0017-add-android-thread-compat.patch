@@ -1,9 +1,9 @@
 diff --git a/include/rex/thread/compat.h b/include/rex/thread/compat.h
 new file mode 100644
-index 0000000..97fc925
+index 0000000..fe044ae
 --- /dev/null
 +++ b/include/rex/thread/compat.h
-@@ -0,0 +1,100 @@
+@@ -0,0 +1,123 @@
 +/**
 + ******************************************************************************
 + * Xenia : Xbox 360 Emulator Research Project                                 *
@@ -22,6 +22,8 @@ index 0000000..97fc925
 +#include <functional>
 +#include <mutex>
 +#include <thread>
++#include <type_traits>
++#include <utility>
 +
 +namespace std {
 +
@@ -54,7 +56,7 @@ index 0000000..97fc925
 +};
 +
 +// jthread polyfill for Android (C++20 feature not in NDK libc++)
-+// std::jthread is NOT a template - it accepts any callable in constructor
++// std::jthread accepts a callable that optionally takes a stop_token as first parameter
 +class jthread {
 + public:
 +  using id = std::thread::id;
@@ -62,9 +64,30 @@ index 0000000..97fc925
 +
 +  jthread() noexcept = default;
 +
++  // Constructor that handles callable with or without stop_token parameter
 +  template <typename Function, typename... Args>
 +  explicit jthread(Function&& f, Args&&... args) {
-+    thread_ = std::thread(std::forward<Function>(f), std::forward<Args>(args)...);
++    // Check if the callable takes a stop_token as first parameter
++    using callable_type = std::decay_t<Function>;
++    constexpr bool takes_stop_token = 
++        std::is_invocable_v<callable_type, stop_token, Args...>;
++    
++    if constexpr (takes_stop_token) {
++      // Callable takes stop_token - we'll pass a dummy one
++      thread_ = std::thread(
++          [func = std::forward<Function>(f), 
++           tup = std::make_tuple(std::forward<Args>(args)...)]() mutable {
++            std::apply(
++                [&func](auto&&... args) {
++                  func(stop_token{}, std::forward<decltype(args)>(args)...);
++                },
++                std::move(tup));
++          });
++    } else {
++      // Callable doesn't take stop_token - forward directly
++      thread_ = std::thread(
++          std::forward<Function>(f), std::forward<Args>(args)...);
++    }
 +  }
 +
 +  jthread(jthread&& other) noexcept : thread_(std::move(other.thread_)) {}
