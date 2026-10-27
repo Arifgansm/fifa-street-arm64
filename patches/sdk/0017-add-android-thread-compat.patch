@@ -2,7 +2,7 @@ diff --git a/include/rex/thread/compat.h b/include/rex/thread/compat.h
 new file mode 100644
 --- /dev/null
 +++ b/include/rex/thread/compat.h
-@@ -0,0 +1,95 @@
+@@ -0,0 +1,96 @@
 +/**
 + ******************************************************************************
 + * Xenia : Xbox 360 Emulator Research Project                                 *
@@ -53,13 +53,15 @@ new file mode 100644
 +};
 +
 +// jthread polyfill for Android (C++20 feature not in NDK libc++)
-+template <typename Function, typename... Args>
++// std::jthread is NOT a template - it accepts any callable in constructor
 +class jthread {
 + public:
 +  using id = std::thread::id;
++  using native_handle_type = std::thread::native_handle_type;
 +
 +  jthread() noexcept = default;
 +
++  template <typename Function, typename... Args>
 +  explicit jthread(Function&& f, Args&&... args) {
 +    thread_ = std::thread(std::forward<Function>(f), std::forward<Args>(args)...);
 +  }
@@ -89,7 +91,7 @@ new file mode 100644
 +  void detach() { thread_.detach(); }
 +
 +  [[nodiscard]] id get_id() const noexcept { return thread_.get_id(); }
-+  [[nodiscard]] std::thread::native_handle_type native_handle() { return thread_.native_handle(); }
++  [[nodiscard]] native_handle_type native_handle() { return thread_.native_handle(); }
 +
 +  void request_stop() noexcept {}
 +  [[nodiscard]] stop_token get_stop_token() const noexcept { return stop_token(); }
