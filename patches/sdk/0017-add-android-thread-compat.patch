@@ -1,8 +1,9 @@
 diff --git a/include/rex/thread/compat.h b/include/rex/thread/compat.h
 new file mode 100644
+index 0000000..97fc925
 --- /dev/null
 +++ b/include/rex/thread/compat.h
-@@ -0,0 +1,96 @@
+@@ -0,0 +1,100 @@
 +/**
 + ******************************************************************************
 + * Xenia : Xbox 360 Emulator Research Project                                 *
@@ -104,17 +105,17 @@ new file mode 100644
 +
 +}  // namespace std
 diff --git a/src/core/timer_queue.cpp b/src/core/timer_queue.cpp
-index 5cfea05..4806569 100644
+index 5cfea05..6ed91d6 100644
 --- a/src/core/timer_queue.cpp
 +++ b/src/core/timer_queue.cpp
-@@ -21,6 +21,10 @@
+@@ -20,6 +20,9 @@
+ #include <rex/assert.h>
  #include <rex/thread.h>
  #include <rex/thread/timer_queue.h>
- 
 +#ifdef __ANDROID__
 +#include <rex/thread/compat.h>
 +#endif
-+
+ 
  namespace dp = disruptorplus;
  
- namespace rex::thread {
+
