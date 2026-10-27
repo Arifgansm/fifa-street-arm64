@@ -48,13 +48,23 @@ jobs:
           export ANDROID_SDK_ROOT
           export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH"
           
-          # Accept licenses and install packages
+          # Accept licenses and install platforms/tools (no NDK from sdkmanager)
           yes | sdkmanager --licenses > /dev/null 2>&1 || true
-          sdkmanager "platform-tools" "platforms;android-35" "build-tools;36.0.0" "ndk;29.0.14206865" > /dev/null
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;36.0.0" > /dev/null
+          
+          # Download NDK r26d directly (more reliable than sdkmanager for CI)
+          NDK_VERSION="r26d"
+          NDK_URL="https://dl.google.com/android/repository/android-ndk-${NDK_VERSION}-linux.zip"
+          echo "Downloading NDK $NDK_VERSION from $NDK_URL"
+          wget -q "$NDK_URL" -O /tmp/ndk.zip
+          unzip -q /tmp/ndk.zip -d /opt/
+          NDK_DIR="/opt/android-ndk-${NDK_VERSION//r/}"
+          echo "NDK installed at $NDK_DIR"
+          ls "$NDK_DIR/build/cmake/android.toolchain.cmake" && echo "Toolchain file found"
           
           # Verify
           echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
-          echo "NDK: $(ls -d $ANDROID_SDK_ROOT/ndk/* 2>/dev/null || echo 'NOT FOUND')"
+          echo "NDK_DIR=$NDK_DIR"
           echo "Platforms: $(ls $ANDROID_SDK_ROOT/platforms/ 2>/dev/null || echo 'NOT FOUND')"
 
       - uses: actions/checkout@v5
@@ -69,10 +79,9 @@ jobs:
 
       - name: Build ReXGlue SDK for Android (NDK)
         env:
-          ANDROID_NDK_HOME: /home/runner/android-sdk/ndk/29.0.14206865
-          ANDROID_SDK_ROOT: /home/runner/android-sdk
+          ANDROID_NDK: /opt/android-ndk-r26d
         run: |
-          export ANDROID_NDK="/home/runner/android-sdk/ndk/29.0.14206865"
+          export ANDROID_NDK="/opt/android-ndk-r26d"
           export ANDROID_SDK="/home/runner/android-sdk"
           repo=$(pwd)
           cd "$RUNNER_TEMP/work"
@@ -107,10 +116,10 @@ jobs:
 
       - name: Build SDL3 for Android
         env:
-          ANDROID_NDK: /home/runner/android-sdk/ndk/29.0.14206865
+          ANDROID_NDK: /opt/android-ndk-r26d
           ANDROID_SDK: /home/runner/android-sdk
         run: |
-          export ANDROID_NDK="/home/runner/android-sdk/ndk/29.0.14206865"
+          export ANDROID_NDK="/opt/android-ndk-r26d"
           export ANDROID_SDK="/home/runner/android-sdk"
           ndk_toolchain="$ANDROID_NDK/build/cmake/android.toolchain.cmake"
           
@@ -156,10 +165,10 @@ jobs:
 
       - name: Build game for Android
         env:
-          ANDROID_NDK: /home/runner/android-sdk/ndk/29.0.14206865
+          ANDROID_NDK: /opt/android-ndk-r26d
           ANDROID_SDK: /home/runner/android-sdk
         run: |
-          export ANDROID_NDK="/home/runner/android-sdk/ndk/29.0.14206865"
+          export ANDROID_NDK="/opt/android-ndk-r26d"
           export ANDROID_SDK="/home/runner/android-sdk"
           ndk_toolchain="$ANDROID_NDK/build/cmake/android.toolchain.cmake"
           
@@ -189,6 +198,8 @@ jobs:
           done
 
       - name: Copy native libraries to Android project
+        env:
+          ANDROID_NDK: /opt/android-ndk-r26d
         run: |
           prebuilt="android/app/src/main/jniLibs/arm64-v8a"
           rm -rf "$prebuilt"
@@ -239,7 +250,7 @@ jobs:
             :app:assembleRelease \
             --no-daemon \
             -Dorg.gradle.jvmargs="-Xmx2048m" \
-            -Pndk.dir="/home/runner/android-sdk/ndk/29.0.14206865"
+            -Pndk.dir="/opt/android-ndk-r26d"
           
           apk_path=$(find app/build/outputs/apk -name "*.apk" -type f | head -1)
           echo "APK: $apk_path"
