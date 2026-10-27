@@ -104,7 +104,12 @@ jobs:
             -DCMAKE_INSTALL_PREFIX="$sdk_install" \
             -DREXGLUE_USE_VULKAN=ON \
             -DREXGLUE_ENABLE_TRACY=OFF \
-            -DSDL_HIDAPI_LIBUSB=OFF
+            -DSDL_HIDAPI_LIBUSB=OFF \
+            -DSDL_VIDEO=ON \
+            -DSDL_X11=OFF \
+            -DSDL_WAYLAND=OFF \
+            -DSDL_X11_SHARED=OFF \
+            -DSDL_WAYLAND_SHARED=OFF
           
           cmake --build "$sdk_src/out/build/android-arm64" --config Release --target install --parallel "$(nproc)"
           
