@@ -78,9 +78,11 @@ jobs:
         run: scripts/prepare.sh "$RUNNER_TEMP/work" ${REF:+"$REF"}
 
       - name: Build ReXGlue SDK for Android (NDK)
+        id: rexglue_build
         env:
           ANDROID_NDK: /opt/android-ndk-r27d
         run: |
+          set -euo pipefail
           export ANDROID_NDK="/opt/android-ndk-r27d"
           export ANDROID_SDK="/home/runner/android-sdk"
           repo=$(pwd)
@@ -97,31 +99,47 @@ jobs:
           echo "=== Checking patched file ==="
           grep -n "ANDROID" "$sdk_src/src/ui/CMakeLists.txt" | head -5
 
-          cmake -S "$sdk_src" -B "$sdk_src/out/build/android-arm64" -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_TOOLCHAIN_FILE="$ndk_toolchain" \
-            -DANDROID_ABI=arm64-v8a \
-            -DANDROID_PLATFORM=android-34 \
-            -DANDROID_STL=c++_shared \
-            -DCMAKE_C_FLAGS="$arch" \
-            -DCMAKE_CXX_FLAGS="$arch" \
-            -DCMAKE_INSTALL_PREFIX="$sdk_install" \
-            -DREXGLUE_USE_VULKAN=ON \
-            -DREXGLUE_ENABLE_TRACY=OFF \
-            -DSDL_HIDAPI_LIBUSB=OFF \
-            -DSDL_VIDEO=ON \
-            -DSDL_X11=OFF \
-            -DSDL_WAYLAND=OFF \
-            -DSDL_X11_SHARED=OFF \
-            -DSDL_WAYLAND_SHARED=OFF
+          # Run cmake configure and capture log
+          {
+            cmake -S "$sdk_src" -B "$sdk_src/out/build/android-arm64" -G Ninja \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_TOOLCHAIN_FILE="$ndk_toolchain" \
+              -DANDROID_ABI=arm64-v8a \
+              -DANDROID_PLATFORM=android-34 \
+              -DANDROID_STL=c++_shared \
+              -DCMAKE_C_FLAGS="$arch" \
+              -DCMAKE_CXX_FLAGS="$arch" \
+              -DCMAKE_INSTALL_PREFIX="$sdk_install" \
+              -DREXGLUE_USE_VULKAN=ON \
+              -DREXGLUE_ENABLE_TRACY=OFF \
+              -DSDL_HIDAPI_LIBUSB=OFF \
+              -DSDL_VIDEO=ON \
+              -DSDL_X11=OFF \
+              -DSDL_WAYLAND=OFF \
+              -DSDL_X11_SHARED=OFF \
+              -DSDL_WAYLAND_SHARED=OFF
+          } 2>&1 | tee "$RUNNER_TEMP/rexglue_cmake.log"
           
-          cmake --build "$sdk_src/out/build/android-arm64" --config Release --target install --parallel "$(nproc)"
+          # Run build and capture log
+          {
+            cmake --build "$sdk_src/out/build/android-arm64" --config Release --target install --parallel "$(nproc)"
+          } 2>&1 | tee -a "$RUNNER_TEMP/rexglue_build.log"
           
           for f in "$sdk_install/lib/librexruntime.so" "$sdk_install/lib/librexgpu-xenos.so"; do
             [ -e "$f" ] || { echo "error: $f was not built" >&2; exit 1; }
             [ "$(od -An -tx1 -j18 -N2 "$f" | tr -d ' \n')" = b700 ] || { echo "error: $f is not aarch64" >&2; exit 1; }
             echo "OK $f (aarch64)"
           done
+
+      - name: Upload ReXGlue SDK build logs (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rexglue-sdk-build-logs
+          path: |
+            ${{ runner.temp }}/rexglue_cmake.log
+            ${{ runner.temp }}/rexglue_build.log
+          retention-days: 5
 
       - name: Build SDL3 for Android
         env:
