@@ -1,0 +1,41 @@
+diff --git a/src/core/threading_posix.cpp b/src/core/threading_posix.cpp
+index 9ac8d15..9e6e122 100644
+--- a/src/core/threading_posix.cpp
++++ b/src/core/threading_posix.cpp
+@@ -274,11 +274,16 @@ class PosixConditionBase {
+     // Use robust mutexes so waits can recover if owner thread terminates.
+     pthread_mutexattr_t attr;
+     if (pthread_mutexattr_init(&attr) == 0) {
++#if !defined(__ANDROID__)
++      // Android's bionic libc doesn't support PTHREAD_MUTEX_ROBUST
+       if (pthread_mutexattr_setrobust(&attr, PTHREAD_MUTEX_ROBUST) == 0) {
+         auto native_mutex = static_cast<pthread_mutex_t*>(mutex_.native_handle());
+         pthread_mutex_destroy(native_mutex);
+         pthread_mutex_init(native_mutex, &attr);
+       }
++#else
++      (void)attr;
++#endif
+       pthread_mutexattr_destroy(&attr);
+     }
+ #endif
+@@ -294,7 +299,9 @@ class PosixConditionBase {
+     auto native_mutex = static_cast<pthread_mutex_t*>(mutex_.native_handle());
+     int lock_result = pthread_mutex_lock(native_mutex);
+     if (lock_result == EOWNERDEAD) {
++#if !defined(__ANDROID__)
+       pthread_mutex_consistent(native_mutex);
++#endif
+     } else if (lock_result != 0) {
+       return WaitResult::kFailed;
+     }
+@@ -349,7 +356,9 @@ class PosixConditionBase {
+         int result = pthread_mutex_trylock(native_mutex);
+         if (result == 0 || result == EOWNERDEAD) {
+           if (result == EOWNERDEAD) {
++#if !defined(__ANDROID__)
+             pthread_mutex_consistent(native_mutex);
++#endif
+           }
+           locks.emplace_back(handles[i]->mutex_, std::adopt_lock);
+         } else {

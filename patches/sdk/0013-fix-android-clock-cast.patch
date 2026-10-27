@@ -1,0 +1,33 @@
+diff --git a/include/rex/chrono/chrono.h b/include/rex/chrono/chrono.h
+index d876846..bcb853a 100644
+--- a/include/rex/chrono/chrono.h
++++ b/include/rex/chrono/chrono.h
+@@ -127,6 +127,28 @@ auto clock_cast(const std::chrono::time_point<SourceClock, Duration>& t) {
+ }
+ #endif
+ 
++#ifdef __ANDROID__
++// Android NDK libc++ may not expose std::chrono::clock_cast (C++20 feature).
++// Provide a fallback that delegates to time_point_cast when no specialization exists.
++template <class, class>
++struct clock_time_conversion {};
++
++template <class DestClock, class SourceClock, class Duration>
++auto clock_cast(const std::chrono::time_point<SourceClock, Duration>& t) {
++  using SrcDuration = typename SourceClock::duration;
++  using DstDuration = typename DestClock::duration;
++  if constexpr (std::is_same_v<SrcDuration, DstDuration>) {
++    // Same-duration clocks: just re-bind the time point.
++    return std::chrono::time_point<DestClock>(t.time_since_epoch());
++  } else {
++    // Different durations: fall back to time_point_cast on the epoch duration.
++    using CommonDuration = std::common_type_t<SrcDuration, DstDuration>;
++    auto epoch = std::chrono::duration_cast<CommonDuration>(t.time_since_epoch());
++    return std::chrono::time_point<DestClock>(std::chrono::duration_cast<DstDuration>(epoch));
++  }
++}
++#endif
++
+ template <>
+ struct clock_time_conversion<::rex::chrono::WinSystemClock, ::rex::chrono::XSystemClock> {
+   using WClock_ = ::rex::chrono::WinSystemClock;

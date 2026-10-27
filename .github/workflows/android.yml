@@ -1,0 +1,245 @@
+name: Android APK build
+
+# Builds the FIFA Street (ReStreet) Android APK for ARM64.
+# Uses GitHub's x86-64 runner with QEMU for cross-compilation.
+# The build includes native libraries but NO game data (no OBB).
+# Game data must be provided by the user on their device.
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "ReStreet commit or branch (default: upstream.json)"
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q cmake ninja-build pkgconf qemu-user-static \
+            openjdk-17-jdk-headless python3-jinja2 curl tar xz file
+          # Android SDK command line tools
+          wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+          unzip -q commandlinetools-linux-11076708_latest.zip -d android-sdk
+          export ANDROID_SDK_ROOT="$PWD/android-sdk"
+          export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH"
+          yes | sdkmanager --licenses > /dev/null
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;36.0.0" "ndk;29.0.14206865" > /dev/null
+
+      - uses: actions/checkout@v5
+
+      - name: Fetch pinned host toolchain (LLVM, CMake, Ninja, sysroot)
+        run: scripts/fetch-toolchain.sh "$RUNNER_TEMP/toolchain"
+
+      - name: Prepare ReStreet and patched SDK
+        env:
+          REF: ${{ inputs.ref }}
+        run: scripts/prepare.sh "$RUNNER_TEMP/work" ${REF:+"$REF"}
+
+      - name: Build ReXGlue SDK for Android (NDK)
+        env:
+          ANDROID_NDK_HOME: /home/runner/android-sdk/ndk/29.0.14206865
+          ANDROID_SDK_ROOT: /home/runner/android-sdk
+        run: |
+          export ANDROID_NDK="/home/runner/android-sdk/ndk/29.0.14206865"
+          export ANDROID_SDK="/home/runner/android-sdk"
+          repo=$(pwd)
+          cd "$RUNNER_TEMP/work"
+          sdk_src="rexglue-sdk"
+          sdk_install="$sdk_src/out/install/android-arm64"
+          ndk_toolchain="$ANDROID_NDK/build/cmake/android.toolchain.cmake"
+          
+          arch="-march=armv8.2-a+rcpc -mtune=cortex-a715"
+          SOURCE_DATE_EPOCH="$(git -C "$sdk_src" log -1 --format=%ct 2>/dev/null || echo 0)"
+          export SOURCE_DATE_EPOCH
+          
+          cmake -S "$sdk_src" -B "$sdk_src/out/build/android-arm64" -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_TOOLCHAIN_FILE="$ndk_toolchain" \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM=android-35 \
+            -DANDROID_STL=c++_shared \
+            -DCMAKE_C_FLAGS="$arch" \
+            -DCMAKE_CXX_FLAGS="$arch" \
+            -DCMAKE_INSTALL_PREFIX="$sdk_install" \
+            -DREXGLUE_USE_VULKAN=ON \
+            -DREXGLUE_ENABLE_TRACY=OFF \
+            -DSDL_HIDAPI_LIBUSB=OFF
+          
+          cmake --build "$sdk_src/out/build/android-arm64" --config Release --target install --parallel "$(nproc)"
+          
+          for f in "$sdk_install/lib/librexruntime.so" "$sdk_install/lib/librexgpu-xenos.so"; do
+            [ -e "$f" ] || { echo "error: $f was not built" >&2; exit 1; }
+            [ "$(od -An -tx1 -j18 -N2 "$f" | tr -d ' \n')" = b700 ] || { echo "error: $f is not aarch64" >&2; exit 1; }
+            echo "OK $f (aarch64)"
+          done
+
+      - name: Build SDL3 for Android
+        env:
+          ANDROID_NDK: /home/runner/android-sdk/ndk/29.0.14206865
+          ANDROID_SDK: /home/runner/android-sdk
+        run: |
+          export ANDROID_NDK="/home/runner/android-sdk/ndk/29.0.14206865"
+          export ANDROID_SDK="/home/runner/android-sdk"
+          ndk_toolchain="$ANDROID_NDK/build/cmake/android.toolchain.cmake"
+          
+          sdl_dir="$RUNNER_TEMP/sdl3"
+          sdl_build="$RUNNER_TEMP/sdl3-build"
+          
+          if [ ! -d "$sdl_dir" ]; then
+            git clone --depth 1 --branch release-3.2.0 https://github.com/libsdl-org/SDL "$sdl_dir"
+          fi
+          
+          cmake -S "$sdl_dir" -B "$sdl_build" -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_TOOLCHAIN_FILE="$ndk_toolchain" \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM=android-35 \
+            -DANDROID_STL=c++_shared \
+            -DSDL_SHARED=ON \
+            -DSDL_STATIC=OFF \
+            -DSDL_TEST_LIBRARY=OFF \
+            -DSDL_TESTS=OFF \
+            -DSDL_EXAMPLES=OFF \
+            -DSDL_VIDEO=ON \
+            -DSDL_VULKAN=ON \
+            -DSDL_JOYSTICK=ON \
+            -DSDL_GAMEPAD=ON \
+            -DSDL_SENSOR=ON \
+            -DSDL_THREADS=ON \
+            -DSDL_FILESYSTEM=ON
+          
+          cmake --build "$sdl_build" --parallel "$(nproc)"
+          
+          libSDL3="$sdl_build/build/outputs/native/release/libSDL3.so"
+          [ -f "$libSDL3" ] || libSDL3="$sdl_build/libSDL3.so"
+          [ -f "$libSDL3" ] || { echo "error: libSDL3.so was not built" >&2; exit 1; }
+          mkdir -p android/app/src/main/jniLibs/arm64-v8a
+          cp "$libSDL3" android/app/src/main/jniLibs/arm64-v8a/
+          echo "OK libSDL3.so (aarch64)"
+
+      - name: Generate placeholder recompiled code
+        run: |
+          cd "$RUNNER_TEMP/work/ReStreet/Installer/recomp-template"
+          python3 "$GITHUB_WORKSPACE/scripts/placeholder-codegen.py" . "$RUNNER_TEMP/work/rexglue-sdk"
+
+      - name: Build game for Android
+        env:
+          ANDROID_NDK: /home/runner/android-sdk/ndk/29.0.14206865
+          ANDROID_SDK: /home/runner/android-sdk
+        run: |
+          export ANDROID_NDK="/home/runner/android-sdk/ndk/29.0.14206865"
+          export ANDROID_SDK="/home/runner/android-sdk"
+          ndk_toolchain="$ANDROID_NDK/build/cmake/android.toolchain.cmake"
+          
+          project="$RUNNER_TEMP/work/ReStreet/Installer/recomp-template"
+          sdk_install="$RUNNER_TEMP/work/rexglue-sdk/out/install/android-arm64"
+          game_build="$project/out/android-arm64"
+          
+          jobs=$(nproc)
+          
+          cmake -S "$project" -B "$game_build" -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_TOOLCHAIN_FILE="$ndk_toolchain" \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM=android-35 \
+            -DANDROID_STL=c++_shared \
+            -DCMAKE_FIND_ROOT_PATH="$sdk_install" \
+            -DCMAKE_PREFIX_PATH="/;$sdk_install" \
+            -DREXGLUE_EXTERNAL_CODEGEN=ON \
+            -DREXGLUE_RECOMP_DEBUG_INFO=none
+          
+          cmake --build "$game_build" --parallel "$jobs"
+          
+          for f in "$game_build/fifastreet" "$game_build/libfifastreet_fifadllzf_xex.so" "$game_build/libfifastreet_FootballCompEngzf_xex.so"; do
+            [ -e "$f" ] || { echo "error: $f was not built" >&2; exit 1; }
+            [ "$(od -An -tx1 -j18 -N2 "$f" | tr -d ' \n')" = b700 ] || { echo "error: $f is not aarch64" >&2; exit 1; }
+            echo "OK $f (aarch64)"
+          done
+
+      - name: Copy native libraries to Android project
+        run: |
+          prebuilt="android/app/src/main/jniLibs/arm64-v8a"
+          rm -rf "$prebuilt"
+          mkdir -p "$prebuilt"
+          
+          project="$RUNNER_TEMP/work/ReStreet/Installer/recomp-template"
+          sdk_install="$RUNNER_TEMP/work/rexglue-sdk/out/install/android-arm64"
+          game_build="$project/out/android-arm64"
+          
+          # The fifastreet executable becomes libmain.so (loaded by SDLActivity)
+          cp "$game_build/fifastreet" "$prebuilt/libfifastreet.so"
+          
+          # SDK libraries
+          cp "$sdk_install/lib/librexruntime.so" "$prebuilt/"
+          cp "$sdk_install/lib/librexgpu-xenos.so" "$prebuilt/"
+          
+          # Guest modules
+          cp "$game_build/libfifastreet_fifadllzf_xex.so" "$prebuilt/"
+          cp "$game_build/libfifastreet_FootballCompEngzf_xex.so" "$prebuilt/"
+          
+          # Strip to reduce APK size
+          strip_tool="$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip"
+          if [ -f "$strip_tool" ]; then
+            "$strip_tool" "$prebuilt"/*.so 2>/dev/null || true
+            echo "Stripped with $strip_tool"
+          fi
+          
+          ls -lh "$prebuilt"/
+          
+          # Android game config
+          cp "config/fifastreet-android.toml" "$prebuilt/fifastreet.toml"
+
+      - name: Build APK with Gradle
+        env:
+          ANDROID_SDK_ROOT: /home/runner/android-sdk
+          ANDROID_HOME: /home/runner/android-sdk
+        run: |
+          cd android
+          echo "sdk.dir=/home/runner/android-sdk" > local.properties
+          
+          # Generate Gradle wrapper if needed
+          if [ ! -f "gradle/wrapper/gradle-wrapper.jar" ]; then
+            echo "Downloading Gradle wrapper..."
+            gradle wrapper --gradle-version 8.12 2>/dev/null || true
+          fi
+          
+          # Build release APK
+          java -cp "gradle/wrapper/gradle-wrapper.jar" \
+            org.gradle.wrapper.GradleWrapperMain \
+            :app:assembleRelease \
+            --no-daemon \
+            -Dorg.gradle.jvmargs="-Xmx2048m" \
+            -Pndk.dir="/home/runner/android-sdk/ndk/29.0.14206865"
+          
+          apk_path=$(find app/build/outputs/apk -name "*.apk" -type f | head -1)
+          echo "APK: $apk_path"
+          echo "apk_path=$apk_path" >> "$GITHUB_OUTPUT"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: fifastreet-android-apk
+          path: android/app/build/outputs/apk/**/*.apk
+          retention-days: 30
+
+      - name: Verify APK architecture
+        run: |
+          apk_path=$(find android/app/build/outputs/apk -name "*.apk" -type f | head -1)
+          unzip -l "$apk_path" | grep -E "lib/(arm64-v8a|arm64)/" || { echo "ERROR: No arm64 libraries found in APK"; exit 1; }
+          echo "APK contains arm64-v8a native libraries ✓"

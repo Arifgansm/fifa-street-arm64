@@ -8,5 +8,14 @@
   "xiso_extract": {
     "url": "https://raw.githubusercontent.com/whompay/SaintsReborn/46c6071d0a0f51cf4cc8ca325f464b0e86727fee/tools/xiso_extract/xiso_extract.cpp",
     "sha256": "e612a0a549933ce1a3620ad7eaa6a0ba89781d6cac2a5c28c52fca933fa87902"
+  },
+  "rexglue_sdk": {
+    "url": "https://github.com/rexglue/rexglue-sdk",
+    "version": "0.10.0"
+  },
+  "sdl3": {
+    "url": "https://github.com/libsdl-org/SDL",
+    "version": "release-3.2.0",
+    "sha256": ""
   }
 }
