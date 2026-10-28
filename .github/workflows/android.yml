@@ -131,7 +131,12 @@ jobs:
                      vulkan-headers vulkan-memory-allocator spirv-headers spirv-tools glslang; do
             if [ ! -d "$sdk/thirdparty/$sub/.git" ]; then
               echo "Init submodule: $sub"
-              git -C "$sdk" submodule update --init --depth 1 "thirdparty/$sub" -q || true
+              if ! git -C "$sdk" submodule update --init --depth 1 "thirdparty/$sub" -q; then
+                echo "ERROR: Failed to init submodule $sub"
+                exit 1
+              fi
+            else
+              echo "Skip submodule: $sub (already initialized)"
             fi
           done
           echo "Initialized required submodules"
