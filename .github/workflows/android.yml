@@ -79,7 +79,7 @@ jobs:
           set -euo pipefail
           repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
           work="$(mkdir -p "$RUNNER_TEMP/work" && cd "$RUNNER_TEMP/work" && pwd)"
-          ref="${REF:-$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["commit"])')" "$repo/upstream.json")}"
+          ref="${REF:-$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["commit"])' "$repo/upstream.json")}"
 
           # Helper to fetch field from upstream.json
           field() {
