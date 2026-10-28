@@ -1,0 +1,30 @@
+diff --git a/include/rex/main_android.h b/include/rex/main_android.h
+new file mode 100644
+index 0000000..7899a63
+--- /dev/null
++++ b/include/rex/main_android.h
+@@ -0,0 +1,9 @@
++#pragma once
++
++#include <android/api-level.h>
++
++namespace rex {
++inline int GetAndroidApiLevel() {
++  return __ANDROID_API__;
++}
++}  // namespace rex
+diff --git a/src/core/memory_posix.cpp b/src/core/memory_posix.cpp
+index b52bf39..f77ba57 100644
+--- a/src/core/memory_posix.cpp
++++ b/src/core/memory_posix.cpp
+@@ -54,7 +54,7 @@
+ #include <linux/ashmem.h>
+ 
+ // TODO(tomc): Android or maybe na. idk
+-// #include "xenia/base/main_android.h"
++#include <rex/main_android.h>
+ #endif
+ 
+ namespace rex {
+
+
