@@ -1,50 +1,64 @@
 diff --git a/src/ui/window_sdl.cpp b/src/ui/window_sdl.cpp
-index 2251429..372c465 100644
+index 2251429..aafc39c 100644
 --- a/src/ui/window_sdl.cpp
 +++ b/src/ui/window_sdl.cpp
-@@ -35,7 +35,7 @@
+@@ -35,9 +35,11 @@
  #include <SDL3/SDL_metal.h>
  
  #include <rex/ui/surface_mac.h>
 -#else
-+#elif !REX_PLATFORM_ANDROID
++#elif REX_PLATFORM_LINUX
  #include <X11/Xlib-xcb.h>
  #include <rex/ui/surface_gnulinux.h>
++#elif REX_PLATFORM_ANDROID
++// Android UI surface handled by SDL
  #endif
-@@ -140,7 +140,7 @@ bool WindowSDL::OpenImpl() {
+ 
+ namespace rex::ui {
+@@ -140,9 +142,12 @@ bool WindowSDL::OpenImpl() {
  #if REX_PLATFORM_MAC
    int initial_width = int(GetDesiredLogicalWidth());
    int initial_height = int(GetDesiredLogicalHeight());
 -#else
-+#elif !REX_PLATFORM_ANDROID
++#elif REX_PLATFORM_LINUX
    int initial_width = int(SizeToPhysical(GetDesiredLogicalWidth()));
    int initial_height = int(SizeToPhysical(GetDesiredLogicalHeight()));
++#else
++  int initial_width = int(GetDesiredLogicalWidth());
++  int initial_height = int(GetDesiredLogicalHeight());
  #endif
-@@ -235,7 +235,7 @@ void* WindowSDL::GetNativeWindowHandle() const {
+   sdl_window_ = SDL_CreateWindow(GetTitle().c_str(), initial_width, initial_height, flags);
+   if (!sdl_window_) {
+@@ -235,6 +240,8 @@ void* WindowSDL::GetNativeWindowHandle() const {
    }
    return SDL_GetPointerProperty(SDL_GetWindowProperties(sdl_window_),
                                  SDL_PROP_WINDOW_WIN32_HWND_POINTER, nullptr);
--#else
-+#elif !REX_PLATFORM_ANDROID
++#elif REX_PLATFORM_ANDROID
++  return nullptr;
+ #else
    return nullptr;
  #endif
- }
-@@ -398,7 +398,7 @@ std::unique_ptr<Surface> WindowSDL::CreateSurfaceImpl(Surface::TypeFlags allowed
+@@ -398,7 +405,7 @@ std::unique_ptr<Surface> WindowSDL::CreateSurfaceImpl(Surface::TypeFlags allowed
        SDL_Metal_DestroyView(metal_view);
      }
    }
 -#else
-+#elif !REX_PLATFORM_ANDROID
++#elif REX_PLATFORM_LINUX
    SDL_PropertiesID props = SDL_GetWindowProperties(sdl_window_);
    if (allowed_types & Surface::kTypeFlag_WaylandSurface) {
      auto* wl_display_ptr = static_cast<struct wl_display*>(
-@@ -456,7 +456,7 @@ void WindowSDL::HandleWindowEvent(SDL_Event& event) {
+@@ -456,9 +463,12 @@ void WindowSDL::HandleWindowEvent(SDL_Event& event) {
          // the backing DPI a second time would halve the desired size on Retina
          // displays.
          OnDesiredLogicalSizeUpdate(uint32_t(event.window.data1), uint32_t(event.window.data2));
 -#else
-+#elif !REX_PLATFORM_ANDROID
++#elif REX_PLATFORM_LINUX
          OnDesiredLogicalSizeUpdate(SizeToLogical(uint32_t(event.window.data1)),
                                     SizeToLogical(uint32_t(event.window.data2)));
++#else
++        // Android: use logical size directly
++        OnDesiredLogicalSizeUpdate(uint32_t(event.window.data1), uint32_t(event.window.data2));
  #endif
+       }
+       break;
 
