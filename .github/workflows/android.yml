@@ -79,19 +79,19 @@ jobs:
           set -euo pipefail
           repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
           work="$(mkdir -p "$RUNNER_TEMP/work" && cd "$RUNNER_TEMP/work" && pwd)"
-          
+
           # Helper to fetch field from upstream.json
           field() {
             python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))[sys.argv[2]])' \
               "$repo/upstream.json" "$1"
           }
-          
+
           ref="${REF:-$(field commit)}"
           rs="$work/ReStreet"
           sdk="$work/rexglue-sdk"
           times="$work/.prepare-times.json"
           python3 "$repo/scripts/keep-times.py" save "$times" "$rs" "$sdk" 2>/dev/null || true
-          
+
           echo "=== Cloning ReStreet ==="
           # Clone ReStreet
           if [ ! -d "$rs/.git" ]; then
@@ -101,7 +101,7 @@ jobs:
           git -C "$rs" -c advice.detachedHead=false checkout -q --force "$ref"
           git -C "$rs" clean -fdq -e generated -e out -- Installer/recomp-template
           echo "ReStreet $(git -C "$rs" rev-parse --short HEAD)"
-          
+
           echo "=== Determining SDK commit ==="
           # SDK commit from ReStreet's BUILDING.md or upstream.json
           sdk_commit="$(sed -n 's/.*git -C ReXGlue checkout \([0-9a-f]\{40\}\).*/\1/p' "$rs/docs/BUILDING.md" | head -n1)"
@@ -112,7 +112,7 @@ jobs:
             echo "note: ReStreet now pins SDK $sdk_commit (upstream.json: $(field sdk_commit))"
           fi
           echo "Using SDK commit: ${sdk_commit:0:12}..."
-          
+
           echo "=== Cloning SDK ==="
           # Clone SDK without submodules first (saves space)
           if [ ! -d "$sdk/.git" ]; then
@@ -122,7 +122,7 @@ jobs:
           git -C "$sdk" -c advice.detachedHead=false checkout -q --force "$sdk_commit"
           git -C "$sdk" clean -fdq -- include src resources cmake
           echo "ReXGlue SDK $(git -C "$sdk" describe --tags --always)"
-          
+
           echo "=== Initializing required submodules ==="
           # Initialize ONLY the submodules needed for Android Vulkan build
           # Skip FFmpeg (huge), catch2 (tests), tracy (disabled), moltenvk (macOS)
@@ -135,7 +135,7 @@ jobs:
           done
           echo "Initialized required submodules"
           du -sh "$sdk/thirdparty/"* 2>/dev/null | sort -hr | head -10
-          
+
           echo "=== Applying patches ==="
           # Apply patches
           git -C "$sdk" apply --whitespace=nowarn "$rs/patches/rexglue-local-changes.patch"
@@ -145,15 +145,25 @@ jobs:
             git -C "$sdk" apply --whitespace=nowarn "$patch"
             echo "Applied $(basename $patch)"
           done
-          
+
           for patch in "$repo"/patches/game/*.patch; do
             [ -e "$patch" ] || continue
             git -C "$rs" apply --whitespace=nowarn "$patch"
             echo "Applied $(basename $patch)"
           done
-          
+
           python3 "$repo/scripts/keep-times.py" restore "$times" 2>/dev/null || true
           echo "Prepare step completed successfully"
+
+      - name: Upload prepare logs (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: prepare-logs
+          path: |
+            ${{ runner.temp }}/work/ReStreet/.git/logs/HEAD
+            ${{ runner.temp }}/work/rexglue-sdk/.git/logs/HEAD
+          retention-days: 5
 
       - name: Build ReXGlue SDK for Android (NDK)
         id: rexglue_build
