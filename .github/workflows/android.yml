@@ -75,7 +75,76 @@ jobs:
       - name: Prepare ReStreet and patched SDK
         env:
           REF: ${{ inputs.ref }}
-        run: scripts/prepare.sh "$RUNNER_TEMP/work" ${REF:+"$REF"}
+        run: |
+          set -euo pipefail
+          repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+          work="$(mkdir -p "$RUNNER_TEMP/work" && cd "$RUNNER_TEMP/work" && pwd)"
+          ref="${REF:-$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["commit"])')" "$repo/upstream.json")}"
+
+          # Helper to fetch field from upstream.json
+          field() {
+            python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))[sys.argv[2]])' \
+              "$repo/upstream.json" "$1"
+          }
+
+          rs="$work/ReStreet"
+          sdk="$work/rexglue-sdk"
+          times="$work/.prepare-times.json"
+          python3 "$repo/scripts/keep-times.py" save "$times" "$rs" "$sdk" 2>/dev/null || true
+
+          # Clone ReStreet
+          if [ ! -d "$rs/.git" ]; then
+            git clone -q -c core.autocrlf=false "$(field repository)" "$rs"
+          fi
+          git -C "$rs" fetch -q origin "$ref" 2>/dev/null || git -C "$rs" fetch -q origin
+          git -C "$rs" -c advice.detachedHead=false checkout -q --force "$ref"
+          git -C "$rs" clean -fdq -e generated -e out -- Installer/recomp-template
+          echo "ReStreet $(git -C "$rs" rev-parse --short HEAD)"
+
+          # SDK commit from ReStreet's BUILDING.md or upstream.json
+          sdk_commit="$(sed -n 's/.*git -C ReXGlue checkout \([0-9a-f]\{40\}\).*/\1/p' "$rs/docs/BUILDING.md" | head -n1)"
+          if [ "${#sdk_commit}" -ne 40 ]; then
+            sdk_commit="$(field sdk_commit)"
+            echo "note: no SDK commit found in ReStreet's docs/BUILDING.md; using upstream.json's"
+          elif [ "$sdk_commit" != "$(field sdk_commit)" ]; then
+            echo "note: ReStreet now pins SDK $sdk_commit (upstream.json: $(field sdk_commit))"
+          fi
+
+          # Clone SDK without submodules first (saves space)
+          if [ ! -d "$sdk/.git" ]; then
+            git clone -q -c core.autocrlf=false "$(field sdk_repository)" "$sdk"
+          fi
+          git -C "$sdk" fetch -q origin "$sdk_commit" 2>/dev/null || true
+          git -C "$sdk" -c advice.detachedHead=false checkout -q --force "$sdk_commit"
+          git -C "$sdk" clean -fdq -- include src resources cmake
+          echo "ReXGlue SDK $(git -C "$sdk" describe --tags --always)"
+
+          # Initialize ONLY the submodules needed for Android Vulkan build
+          # Skip FFmpeg (huge), catch2 (tests), tracy (disabled), moltenvk (macOS)
+          for sub in cli11 libmspack tomlplusplus simde xxHash spdlog fmt utfcpp imgui sdl3 \
+                     vulkan-headers vulkan-memory-allocator spirv-headers spirv-tools glslang; do
+            if [ ! -d "$sdk/thirdparty/$sub/.git" ]; then
+              git -C "$sdk" submodule update --init --depth 1 "thirdparty/$sub" -q || true
+            fi
+          done
+          echo "Initialized required submodules"
+
+          # Apply patches
+          git -C "$sdk" apply --whitespace=nowarn "$rs/patches/rexglue-local-changes.patch"
+          echo "Applied ReStreet's patches/rexglue-local-changes.patch"
+          for patch in "$repo"/patches/sdk/*.patch; do
+            [ -e "$patch" ] || continue
+            git -C "$sdk" apply --whitespace=nowarn "$patch"
+            echo "Applied ${patch#"$repo"/}"
+          done
+
+          for patch in "$repo"/patches/game/*.patch; do
+            [ -e "$patch" ] || continue
+            git -C "$rs" apply --whitespace=nowarn "$patch"
+            echo "Applied ${patch#"$repo"/}"
+          done
+
+          python3 "$repo/scripts/keep-times.py" restore "$times" 2>/dev/null || true
 
       - name: Build ReXGlue SDK for Android (NDK)
         id: rexglue_build
