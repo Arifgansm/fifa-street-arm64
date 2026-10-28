@@ -75,9 +75,10 @@ jobs:
       - name: Prepare ReStreet and patched SDK
         env:
           REF: ${{ inputs.ref }}
+          GITHUB_WORKSPACE: ${{ github.workspace }}
         run: |
           set -euo pipefail
-          repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+          repo="${GITHUB_WORKSPACE}"
           work="$(mkdir -p "$RUNNER_TEMP/work" && cd "$RUNNER_TEMP/work" && pwd)"
 
           # Helper to fetch field from upstream.json
