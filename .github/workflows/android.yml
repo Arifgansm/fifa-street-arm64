@@ -89,6 +89,8 @@ jobs:
           rs="$work/ReStreet"
           sdk="$work/rexglue-sdk"
           
+          exec > "$RUNNER_TEMP/prepare_output.txt" 2>&1
+          
           echo "=== Cloning ReStreet ==="
           git clone -q -c core.autocrlf=false "$(field repository)" "$rs" || true
           cd "$rs"
