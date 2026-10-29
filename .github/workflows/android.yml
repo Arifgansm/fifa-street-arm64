@@ -111,7 +111,13 @@ jobs:
           for sub in cli11 libmspack FFmpeg tomlplusplus simde xxHash spdlog fmt utfcpp imgui sdl3 \
                      vulkan-headers vulkan-memory-allocator spirv-headers spirv-tools glslang; do
             if [ ! -d "$sdk/thirdparty/$sub/.git" ] && [ ! -f "$sdk/thirdparty/$sub/.git" ]; then
-              git -C "$sdk" submodule update --init --depth 1 "thirdparty/$sub" -q || true
+              echo "Init: $sub"
+              if ! git -C "$sdk" submodule update --init --depth 1 "thirdparty/$sub"; then
+                echo "ERROR: Failed to init $sub"
+                exit 1
+              fi
+            else
+              echo "Skip: $sub (already exists)"
             fi
           done
           echo "Submodules initialized"
