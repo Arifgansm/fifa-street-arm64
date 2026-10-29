@@ -102,6 +102,7 @@ jobs:
           git -C "$rs" -c advice.detachedHead=false checkout -q --force "$ref"
           git -C "$rs" clean -fdq -e generated -e out -- Installer/recomp-template
           echo "ReStreet $(git -C "$rs" rev-parse --short HEAD)"
+          echo "DEBUG: ReStreet cloned successfully"
 
           echo "=== Determining SDK commit ==="
           # SDK commit from ReStreet's BUILDING.md or upstream.json
@@ -113,6 +114,7 @@ jobs:
             echo "note: ReStreet now pins SDK $sdk_commit (upstream.json: $(field sdk_commit))"
           fi
           echo "Using SDK commit: ${sdk_commit:0:12}..."
+          echo "DEBUG: SDK commit determined"
 
           echo "=== Cloning SDK ==="
           # Clone SDK without submodules first (saves space)
@@ -123,6 +125,7 @@ jobs:
           git -C "$sdk" -c advice.detachedHead=false checkout -q --force "$sdk_commit"
           git -C "$sdk" clean -fdq -- include src resources cmake
           echo "ReXGlue SDK $(git -C "$sdk" describe --tags --always)"
+          echo "DEBUG: SDK cloned successfully"
 
           echo "=== Initializing required submodules ==="
           # Initialize ONLY the submodules needed for Android Vulkan build
@@ -141,6 +144,7 @@ jobs:
           done
           echo "Initialized required submodules"
           du -sh "$sdk/thirdparty/"* 2>/dev/null | sort -hr | head -10
+          echo "DEBUG: Submodules initialized"
 
           echo "=== Applying patches ==="
           # Apply patches
