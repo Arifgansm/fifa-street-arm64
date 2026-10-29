@@ -123,15 +123,30 @@ jobs:
           echo "Submodules initialized"
           
           echo "=== Applying patches ==="
-          git -C "$sdk" apply --whitespace=nowarn "$rs/patches/rexglue-local-changes.patch" || true
+          # Apply ReStreet's local changes patch
+          if ! git -C "$sdk" apply --whitespace=nowarn "$rs/patches/rexglue-local-changes.patch"; then
+            echo "ERROR: ReStreet patch failed"
+            exit 1
+          fi
+          echo "Applied ReStreet's patches/rexglue-local-changes.patch"
+          
+          # Apply our SDK patches
           for patch in "$repo"/patches/sdk/*.patch; do
             [ -e "$patch" ] || continue
-            git -C "$sdk" apply --whitespace=nowarn "$patch" || true
+            if ! git -C "$sdk" apply --whitespace=nowarn "$patch"; then
+              echo "ERROR: Patch $(basename $patch) failed to apply"
+              exit 1
+            fi
             echo "Applied $(basename $patch)"
           done
+          
+          # Apply game patches
           for patch in "$repo"/patches/game/*.patch; do
             [ -e "$patch" ] || continue
-            git -C "$rs" apply --whitespace=nowarn "$patch" || true
+            if ! git -C "$rs" apply --whitespace=nowarn "$patch"; then
+              echo "ERROR: Game patch $(basename $patch) failed to apply"
+              exit 1
+            fi
             echo "Applied $(basename $patch)"
           done
           echo "Prepare complete"
