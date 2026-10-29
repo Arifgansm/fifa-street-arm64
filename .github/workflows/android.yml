@@ -159,6 +159,7 @@ jobs:
           path: |
             ${{ runner.temp }}/work/ReStreet/.git/logs/HEAD
             ${{ runner.temp }}/work/rexglue-sdk/.git/logs/HEAD
+            ${{ runner.temp }}/prepare_output.txt
           retention-days: 5
 
       - name: Build ReXGlue SDK for Android (NDK)
