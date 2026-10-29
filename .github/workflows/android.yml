@@ -109,7 +109,7 @@ jobs:
           
           echo "=== Initializing submodules ==="
           for sub in cli11 libmspack FFmpeg tomlplusplus simde xxHash spdlog fmt utfcpp imgui sdl3 \
-                     vulkan-headers vulkan-memory-allocator spirv-headers spirv-tools glslang; do
+                     vulkan-headers vulkan-memory-allocator spirv-headers spirv-tools glslang o1heap; do
             if [ ! -d "$sdk/thirdparty/$sub/.git" ] && [ ! -f "$sdk/thirdparty/$sub/.git" ]; then
               echo "Init: $sub"
               if ! git -C "$sdk" submodule update --init --depth 1 "thirdparty/$sub"; then
