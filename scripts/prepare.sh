@@ -55,8 +55,13 @@ git -C "$sdk" fetch -q origin "$sdk_commit" 2>/dev/null || true
 git -C "$sdk" -c advice.detachedHead=false checkout -q --force "$sdk_commit"
 # Files an earlier patch added; checkout --force leaves them.
 git -C "$sdk" clean -fdq -- include src resources cmake
-git -C "$sdk" submodule update --init --recursive --force --depth 1 -q ||
-    git -C "$sdk" submodule update --init --recursive --force -q
+# Initialize ONLY the submodules needed for Android Vulkan build (skip FFmpeg for space)
+for sub in cli11 libmspack tomlplusplus simde xxHash spdlog fmt utfcpp imgui sdl3 \
+           vulkan-headers vulkan-memory-allocator spirv-headers spirv-tools glslang; do
+    if [ ! -d "$sdk/thirdparty/$sub/.git" ]; then
+        git -C "$sdk" submodule update --init --depth 1 "thirdparty/$sub" -q || true
+    fi
+done
 echo "ReXGlue SDK $(git -C "$sdk" describe --tags --always)"
 
 git -C "$sdk" apply --whitespace=nowarn "$rs/patches/rexglue-local-changes.patch"
