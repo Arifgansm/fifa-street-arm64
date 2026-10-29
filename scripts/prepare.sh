@@ -28,11 +28,12 @@ ref="${2:-$(field commit)}"
 rs="$work/ReStreet"
 sdk="$work/rexglue-sdk"
 times="$work/.prepare-times.json"
-python3 "$repo/scripts/keep-times.py" save "$times" "$rs" "$sdk"
+python3 "$repo/scripts/keep-times.py" save "$times" "$rs" "$sdk" || true
 
 if [ ! -d "$rs/.git" ]; then
     git clone -q -c core.autocrlf=false "$(field repository)" "$rs"
 fi
+echo "DEBUG: Cloning ReStreet complete, fetching $ref"
 git -C "$rs" fetch -q origin "$ref" 2>/dev/null || git -C "$rs" fetch -q origin
 git -C "$rs" -c advice.detachedHead=false checkout -q --force "$ref"
 # Files an earlier patch added; checkout --force leaves them. The generated
@@ -40,6 +41,7 @@ git -C "$rs" -c advice.detachedHead=false checkout -q --force "$ref"
 git -C "$rs" clean -fdq -e generated -e out -- Installer/recomp-template
 echo "ReStreet $(git -C "$rs" rev-parse --short HEAD)"
 
+echo "DEBUG: ReStreet ready"
 sdk_commit="$(sed -n 's/.*git -C ReXGlue checkout \([0-9a-f]\{40\}\).*/\1/p' "$rs/docs/BUILDING.md" | head -n1)"
 if [ "${#sdk_commit}" -ne 40 ]; then
     sdk_commit="$(field sdk_commit)"
@@ -51,6 +53,7 @@ fi
 if [ ! -d "$sdk/.git" ]; then
     git clone -q -c core.autocrlf=false "$(field sdk_repository)" "$sdk"
 fi
+echo "DEBUG: Cloning SDK, fetching $sdk_commit"
 git -C "$sdk" fetch -q origin "$sdk_commit" 2>/dev/null || true
 git -C "$sdk" -c advice.detachedHead=false checkout -q --force "$sdk_commit"
 # Files an earlier patch added; checkout --force leaves them.
@@ -64,6 +67,7 @@ for sub in cli11 libmspack tomlplusplus simde xxHash spdlog fmt utfcpp imgui sdl
 done
 echo "ReXGlue SDK $(git -C "$sdk" describe --tags --always)"
 
+echo "DEBUG: SDK cloned, applying patches"
 git -C "$sdk" apply --whitespace=nowarn "$rs/patches/rexglue-local-changes.patch"
 echo "Applied ReStreet's patches/rexglue-local-changes.patch"
 for patch in "$repo"/patches/sdk/*.patch; do
